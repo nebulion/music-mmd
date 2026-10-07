@@ -28,6 +28,9 @@ data class SongUiModel(
     val sourceType: String = "YOUTUBE",
     val audioUri: String? = null,
     val album: String? = null,
+    /** YouTube artist (`UC…`) and album (`MPREb_…`) ids, when known. */
+    val artistId: String? = null,
+    val albumId: String? = null,
 )
 
 @Composable

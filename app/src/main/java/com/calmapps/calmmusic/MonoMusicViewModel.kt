@@ -31,6 +31,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -679,10 +681,12 @@ class MonoMusicViewModel(
     data class ArtistContent(
         val songs: List<SongUiModel>,
         val albums: List<AlbumUiModel>,
+        val singles: List<AlbumUiModel> = emptyList(),
     )
 
+    /** `UC…` ids are YouTube artists; anything else is a library artist key. */
     suspend fun getArtistContent(artistId: String): ArtistContent =
-        withContext(Dispatchers.IO) {
+        if (artistId.startsWith("UC")) getYouTubeArtistContent(artistId) else withContext(Dispatchers.IO) {
             val songs = songDao.getByArtistKey(artistId)
             ArtistContent(
                 songs = songs.map { it.toUiModel() },
@@ -692,6 +696,36 @@ class MonoMusicViewModel(
                 ),
             )
         }
+
+    /**
+     * A YouTube artist: the full album and singles lists (from the "More"
+     * discography pages, falling back to the page's carousels), and top songs.
+     */
+    private suspend fun getYouTubeArtistContent(artistId: String): ArtistContent = coroutineScope {
+        val client = app.youTubeInnertubeClient
+        val page = client.getArtist(artistId) ?: error("Couldn't load this artist")
+        val albums = async { page.allAlbums?.let { runCatching { client.getDiscography(it, page.name) }.getOrNull() }?.takeIf { it.isNotEmpty() } ?: page.albums }
+        val singles = async { page.allSingles?.let { runCatching { client.getDiscography(it, page.name) }.getOrNull() }?.takeIf { it.isNotEmpty() } ?: page.singles }
+        fun toUi(a: InnertubeAlbumResult) = AlbumUiModel(id = a.albumId, title = a.title, artist = a.artist ?: page.name, sourceType = "YOUTUBE", releaseYear = a.year)
+        ArtistContent(
+            songs = page.topSongs.map {
+                SongUiModel(
+                    id = it.videoId,
+                    title = it.title,
+                    artist = it.artist,
+                    durationText = it.durationMillis?.let { ms -> "%d:%02d".format(ms / 60000, ms / 1000 % 60) },
+                    durationMillis = it.durationMillis,
+                    sourceType = "YOUTUBE",
+                    audioUri = it.videoId,
+                    album = it.album,
+                    artistId = it.artistId ?: artistId,
+                    albumId = it.albumId,
+                )
+            },
+            albums = albums.await().map(::toUi),
+            singles = singles.await().map(::toUi),
+        )
+    }
 
     // ------------------------------------------------------------------
     // Tag editing

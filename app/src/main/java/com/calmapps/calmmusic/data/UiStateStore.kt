@@ -3,6 +3,7 @@ package com.calmapps.calmmusic.data
 import android.content.Context
 import android.util.AtomicFile
 import com.calmapps.calmmusic.ui.AlbumUiModel
+import com.calmapps.calmmusic.ui.ArtistResultUiModel
 import com.calmapps.calmmusic.ui.SongUiModel
 import org.json.JSONObject
 import java.io.File
@@ -19,6 +20,7 @@ data class UiState(
     val searchTab: Int = 0,
     val searchSongs: List<SongUiModel> = emptyList(),
     val searchAlbums: List<AlbumUiModel> = emptyList(),
+    val searchArtists: List<ArtistResultUiModel> = emptyList(),
     val searchLocalSongs: List<SongUiModel> = emptyList(),
     val selectedAlbum: AlbumUiModel? = null,
     val selectedArtist: String? = null,
@@ -64,6 +66,7 @@ class UiStateStore(context: Context) {
             .put("searchTab", s.searchTab)
             .put("searchSongs", s.searchSongs.songsToJson())
             .put("searchAlbums", s.searchAlbums.albumsToJson())
+            .put("searchArtists", s.searchArtists.artistsToJson())
             .put("searchLocalSongs", s.searchLocalSongs.songsToJson())
             .putOpt("selectedAlbum", s.selectedAlbum?.toJson())
             .putOpt("selectedArtist", s.selectedArtist)
@@ -75,6 +78,7 @@ class UiStateStore(context: Context) {
             searchTab = o.optInt("searchTab"),
             searchSongs = o.optJSONArray("searchSongs").toSongs(),
             searchAlbums = o.optJSONArray("searchAlbums").toAlbums(),
+            searchArtists = o.optJSONArray("searchArtists").toArtistResults(),
             searchLocalSongs = o.optJSONArray("searchLocalSongs").toSongs(),
             selectedAlbum = o.optJSONObject("selectedAlbum")?.let { runCatching { albumFromJson(it) }.getOrNull() },
             selectedArtist = if (o.has("selectedArtist")) o.getString("selectedArtist") else null,

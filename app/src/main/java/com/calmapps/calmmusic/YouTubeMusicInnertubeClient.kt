@@ -26,6 +26,14 @@ interface YouTubeMusicInnertubeClient {
     suspend fun findAlbumTracks(albumTitle: String, artist: String?): List<InnertubeAlbumTrack>
 
     suspend fun getBestAudioUrl(videoId: String): String
+
+    suspend fun searchArtists(query: String, limit: Int = 25): List<InnertubeArtistResult>
+
+    /** An artist's page: top songs, albums, singles. */
+    suspend fun getArtist(artistId: String): InnertubeArtistPage?
+
+    /** Every album (or single) behind an artist carousel's "More" link. */
+    suspend fun getDiscography(ref: InnertubeBrowseRef, artistName: String?): List<InnertubeAlbumResult>
 }
 
 
@@ -35,6 +43,8 @@ data class InnertubeSongResult(
     val artist: String,
     val album: String?,
     val durationMillis: Long?,
+    val artistId: String? = null,
+    val albumId: String? = null,
 )
 
 data class InnertubeAlbumResult(
@@ -42,6 +52,7 @@ data class InnertubeAlbumResult(
     val title: String,
     val artist: String?,
     val year: Int?,
+    val artistId: String? = null,
 )
 
 data class InnertubeAlbumTrack(
@@ -65,6 +76,7 @@ private enum class MusicSearchFilter {
 
 private const val PARAMS_SONGS: String = "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D"
 private const val PARAMS_ALBUMS: String = "EgWKAQIYAWoKEAkQChAFEAMQBA%3D%3D"
+private const val PARAMS_ARTISTS: String = "EgWKAQIgAWoKEAkQChAFEAMQBA%3D%3D"
 
 internal class YouTubeMusicInnertubeClientImpl(
     private val httpClient: OkHttpClient,
@@ -139,6 +151,48 @@ internal class YouTubeMusicInnertubeClientImpl(
             ?: return emptyList()
 
         return getAlbumTracks(match.albumId)
+    }
+
+    override suspend fun searchArtists(query: String, limit: Int): List<InnertubeArtistResult> {
+        if (query.isBlank() || limit <= 0) return emptyList()
+        return withContext(Dispatchers.IO) {
+            val body = JSONObject()
+                .put("context", JSONObject().put("client", buildClientJson()))
+                .put("query", query)
+                .put("params", PARAMS_ARTISTS)
+            post(baseUrl, body)?.let { InnertubeArtistParser.parseArtistSearch(it, limit) }.orEmpty()
+        }
+    }
+
+    override suspend fun getArtist(artistId: String): InnertubeArtistPage? {
+        if (!artistId.startsWith("UC")) return null
+        return withContext(Dispatchers.IO) {
+            browse(artistId, null)?.let { InnertubeArtistParser.parseArtistPage(artistId, it) }
+        }
+    }
+
+    override suspend fun getDiscography(ref: InnertubeBrowseRef, artistName: String?): List<InnertubeAlbumResult> =
+        withContext(Dispatchers.IO) {
+            browse(ref.browseId, ref.params)?.let { InnertubeArtistParser.parseDiscography(it, artistName) }.orEmpty()
+        }
+
+    private fun browse(browseId: String, params: String?): JSONObject? {
+        val body = JSONObject()
+            .put("context", JSONObject().put("client", buildClientJson()))
+            .put("browseId", browseId)
+        if (params != null) body.put("params", params)
+        return post(browseUrl, body)
+    }
+
+    private fun post(url: String, body: JSONObject): JSONObject? {
+        val request = Request.Builder()
+            .url(url)
+            .post(body.toString().toRequestBody(jsonMediaType))
+            .build()
+        httpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) return null
+            return JSONObject(response.body?.string() ?: return null)
+        }
     }
 
     private fun buildClientJson(): JSONObject = JSONObject().apply {
@@ -408,82 +462,7 @@ internal class YouTubeMusicInnertubeClientImpl(
         }
     }
 
-    private fun parseSongItem(item: JSONObject): InnertubeSongResult? {
-        val flexColumns = item.optJSONArray("flexColumns") ?: return null
-        if (flexColumns.length() == 0) return null
-
-        val mainColumn = flexColumns.optJSONObject(0)
-            ?.optJSONObject("musicResponsiveListItemFlexColumnRenderer")
-            ?: return null
-
-        val text = mainColumn.optJSONObject("text")
-        val titleRuns = text?.optJSONArray("runs")
-        if (titleRuns == null || titleRuns.length() == 0) return null
-
-        val titleRun = titleRuns.optJSONObject(0)
-        val title = titleRun?.optString("text").orEmpty()
-        if (title.isBlank()) return null
-
-        val videoId = titleRun
-            ?.optJSONObject("navigationEndpoint")
-            ?.optJSONObject("watchEndpoint")
-            ?.optString("videoId")
-            .takeUnless { it.isNullOrBlank() }
-            ?: item.optJSONObject("playlistItemData")
-                ?.optString("videoId")
-                .takeUnless { it.isNullOrBlank() }
-            ?: return null
-
-        var artist: String? = null
-        var album: String? = null
-        var durationText: String? = null
-
-        for (i in 1 until flexColumns.length()) {
-            val subtitleColumn = flexColumns.optJSONObject(i)
-                ?.optJSONObject("musicResponsiveListItemFlexColumnRenderer")
-                ?: continue
-
-            val subtitleText = subtitleColumn.optJSONObject("text") ?: continue
-            val subtitleRuns = subtitleText.optJSONArray("runs") ?: continue
-
-            for (k in 0 until subtitleRuns.length()) {
-                val run = subtitleRuns.optJSONObject(k) ?: continue
-                val textValue = run.optString("text").orEmpty().trim()
-                if (textValue.isEmpty()) continue
-
-                val navEndpoint = run.optJSONObject("navigationEndpoint")
-                val browseEndpoint = navEndpoint?.optJSONObject("browseEndpoint")
-                val browseId = browseEndpoint?.optString("browseId")
-
-                when {
-                    artist == null && browseId != null && browseId.startsWith("UC") -> {
-                        artist = textValue
-                    }
-                    album == null && browseId != null && browseId.startsWith("MPRE") -> {
-                        album = textValue
-                    }
-                    artist == null && browseId.isNullOrBlank() -> {
-                        artist = textValue
-                    }
-                }
-
-                if (durationText == null && textValue.contains(":")) {
-                    durationText = textValue
-                }
-            }
-        }
-
-        val safeArtist = artist?.takeIf { it.isNotBlank() } ?: "Unknown artist"
-        val durationMillis = durationText?.let { parseDurationToMillis(it) }
-
-        return InnertubeSongResult(
-            videoId = videoId,
-            title = title,
-            artist = safeArtist,
-            album = album,
-            durationMillis = durationMillis,
-        )
-    }
+    private fun parseSongItem(item: JSONObject): InnertubeSongResult? = InnertubeArtistParser.parseSongRow(item)
 
     private fun parseAlbumItem(item: JSONObject): InnertubeAlbumResult? {
         val flexColumns = item.optJSONArray("flexColumns") ?: return null
@@ -514,6 +493,7 @@ internal class YouTubeMusicInnertubeClientImpl(
             ?: return null
 
         var artist: String? = null
+        var artistId: String? = null
         var year: Int? = null
 
         for (i in 1 until flexColumns.length()) {
@@ -547,6 +527,7 @@ internal class YouTubeMusicInnertubeClientImpl(
 
                 if (subBrowseId != null && subBrowseId.startsWith("UC")) {
                     artist = textValue
+                    if (artistId == null) artistId = subBrowseId
                 } else if (artist == null) {
                     artist = textValue
                 }
@@ -558,6 +539,7 @@ internal class YouTubeMusicInnertubeClientImpl(
             title = title,
             artist = artist,
             year = year,
+            artistId = artistId,
         )
     }
 

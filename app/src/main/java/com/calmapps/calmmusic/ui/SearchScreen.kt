@@ -1,21 +1,36 @@
 package com.calmapps.calmmusic.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mudita.mmd.components.lazy.LazyColumnMMD
 import com.mudita.mmd.components.tabs.PrimaryTabRowMMD
 import com.mudita.mmd.components.tabs.TabMMD
 import com.mudita.mmd.components.text.TextMMD
+
+/** An artist found on YouTube Music. */
+data class ArtistResultUiModel(
+    val id: String,
+    val name: String,
+    val subtitle: String?,
+)
+
+private val SEARCH_TABS = listOf("Songs", "Albums", "Artists", "Local")
+const val SEARCH_TAB_ARTISTS = 2
+const val SEARCH_TAB_LOCAL = 3
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -24,49 +39,32 @@ fun SearchScreen(
     errorMessage: String?,
     songs: List<SongUiModel>,
     albums: List<AlbumUiModel>,
+    artists: List<ArtistResultUiModel>,
     localSongs: List<SongUiModel>,
     selectedTab: Int,
     onSelectedTabChange: (Int) -> Unit,
     onPlaySongClick: (SongUiModel) -> Unit,
     onAlbumClick: (AlbumUiModel) -> Unit,
+    onArtistClick: (ArtistResultUiModel) -> Unit,
     librarySongIds: Set<String> = emptySet(),
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
                 PrimaryTabRowMMD(selectedTabIndex = selectedTab) {
-                    TabMMD(
-                        selected = selectedTab == 0,
-                        onClick = { onSelectedTabChange(0) },
-                        text = {
-                            TextMMD(
-                                text = "Songs",
-                                fontSize = 16.sp,
-                                fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal,
-                            )
-                        },
-                    )
-                    TabMMD(
-                        selected = selectedTab == 1,
-                        onClick = { onSelectedTabChange(1) },
-                        text = {
-                            TextMMD(
-                                text = "Albums",
-                                fontSize = 16.sp,
-                                fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal,
-                            )
-                        },
-                    )
-                    TabMMD(
-                        selected = selectedTab == 2,
-                        onClick = { onSelectedTabChange(2) },
-                        text = {
-                            TextMMD(
-                                text = "Local",
-                                fontSize = 16.sp,
-                                fontWeight = if (selectedTab == 2) FontWeight.Bold else FontWeight.Normal,
-                            )
-                        },
-                    )
+                    SEARCH_TABS.forEachIndexed { index, title ->
+                        TabMMD(
+                            selected = selectedTab == index,
+                            onClick = { onSelectedTabChange(index) },
+                            text = {
+                                TextMMD(
+                                    text = title,
+                                    fontSize = 16.sp,
+                                    fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal,
+                                    maxLines = 1,
+                                )
+                            },
+                        )
+                    }
                 }
 
                 LazyColumnMMD(contentPadding = PaddingValues(16.dp)) {
@@ -133,7 +131,26 @@ fun SearchScreen(
                             }
                         }
 
-                        2 -> {
+                        SEARCH_TAB_ARTISTS -> {
+                            if (artists.isNotEmpty()) {
+                                items(artists.size) { index ->
+                                    val artist = artists[index]
+                                    ArtistResultItem(
+                                        artist = artist,
+                                        onClick = { onArtistClick(artist) },
+                                        showDivider = index != artists.lastIndex,
+                                    )
+                                }
+                            }
+
+                            if (!isSearching && errorMessage == null && artists.isEmpty()) {
+                                item {
+                                    TextMMD(text = "No artists. Try a different search.")
+                                }
+                            }
+                        }
+
+                        SEARCH_TAB_LOCAL -> {
                             if (localSongs.isNotEmpty()) {
                                 items(localSongs.size) { index ->
                                     val song = localSongs[index]
@@ -156,5 +173,40 @@ fun SearchScreen(
                     }
                 }
             }
+    }
+}
+
+@Composable
+private fun ArtistResultItem(
+    artist: ArtistResultUiModel,
+    onClick: () -> Unit,
+    showDivider: Boolean,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(bottom = 8.dp),
+    ) {
+        TextMMD(
+            text = artist.name,
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        if (!artist.subtitle.isNullOrBlank()) {
+            Spacer(modifier = Modifier.height(4.dp))
+            TextMMD(
+                text = artist.subtitle,
+                fontSize = 16.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        if (showDivider) {
+            Spacer(modifier = Modifier.height(8.dp))
+            DashedDivider()
+        }
     }
 }

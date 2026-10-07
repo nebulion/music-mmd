@@ -1,6 +1,7 @@
 package com.calmapps.calmmusic.data
 
 import com.calmapps.calmmusic.ui.AlbumUiModel
+import com.calmapps.calmmusic.ui.ArtistResultUiModel
 import com.calmapps.calmmusic.ui.SongUiModel
 import org.json.JSONArray
 import org.json.JSONObject
@@ -18,6 +19,8 @@ fun SongUiModel.toJson(): JSONObject = JSONObject()
     .put("sourceType", sourceType)
     .putOpt("audioUri", audioUri)
     .putOpt("album", album)
+    .putOpt("artistId", artistId)
+    .putOpt("albumId", albumId)
 
 fun songFromJson(o: JSONObject): SongUiModel = SongUiModel(
     id = o.getString("id"),
@@ -30,6 +33,8 @@ fun songFromJson(o: JSONObject): SongUiModel = SongUiModel(
     sourceType = o.optString("sourceType", "YOUTUBE"),
     audioUri = o.optStringOrNull("audioUri"),
     album = o.optStringOrNull("album"),
+    artistId = o.optStringOrNull("artistId"),
+    albumId = o.optStringOrNull("albumId"),
 )
 
 fun AlbumUiModel.toJson(): JSONObject = JSONObject()
@@ -46,6 +51,21 @@ fun albumFromJson(o: JSONObject): AlbumUiModel = AlbumUiModel(
     sourceType = o.optString("sourceType", "YOUTUBE"),
     releaseYear = if (o.has("releaseYear")) o.getInt("releaseYear") else null,
 )
+
+fun ArtistResultUiModel.toJson(): JSONObject = JSONObject()
+    .put("id", id)
+    .put("name", name)
+    .putOpt("subtitle", subtitle)
+
+fun List<ArtistResultUiModel>.artistsToJson(): JSONArray = JSONArray().also { a -> forEach { a.put(it.toJson()) } }
+
+fun JSONArray?.toArtistResults(): List<ArtistResultUiModel> =
+    if (this == null) emptyList() else (0 until length()).mapNotNull { i ->
+        runCatching {
+            val o = getJSONObject(i)
+            ArtistResultUiModel(o.getString("id"), o.getString("name"), o.optStringOrNull("subtitle"))
+        }.getOrNull()
+    }
 
 fun List<SongUiModel>.songsToJson(): JSONArray = JSONArray().also { a -> forEach { a.put(it.toJson()) } }
 fun List<AlbumUiModel>.albumsToJson(): JSONArray = JSONArray().also { a -> forEach { a.put(it.toJson()) } }

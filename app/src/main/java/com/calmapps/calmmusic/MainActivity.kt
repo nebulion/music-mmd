@@ -92,6 +92,8 @@ import com.calmapps.calmmusic.ui.DownloadsScreen
 import com.calmapps.calmmusic.ui.MoreScreen
 import com.calmapps.calmmusic.ui.NowPlayingScreen
 import com.calmapps.calmmusic.ui.PermissionsOnboardingScreen
+import com.calmapps.calmmusic.ui.ArtistResultUiModel
+import com.calmapps.calmmusic.ui.SEARCH_TAB_LOCAL
 import com.calmapps.calmmusic.ui.PlaylistAddSongsScreen
 import com.calmapps.calmmusic.ui.PlaylistDetailsScreen
 import com.calmapps.calmmusic.ui.PlaylistEditScreen
@@ -319,6 +321,7 @@ fun MonoMusic(app: MonoMusic) {
     var searchQuery by remember { mutableStateOf(savedUi.searchQuery) }
     var searchSongs by remember { mutableStateOf(savedUi.searchSongs) }
     var searchAlbums by remember { mutableStateOf(savedUi.searchAlbums) }
+    var searchArtists by remember { mutableStateOf(savedUi.searchArtists) }
     var searchLocalSongs by remember { mutableStateOf(savedUi.searchLocalSongs) }
     var searchSelectedTab by remember { mutableStateOf(savedUi.searchTab) }
     var isSearching by remember { mutableStateOf(false) }
@@ -351,6 +354,7 @@ fun MonoMusic(app: MonoMusic) {
                     searchTab = searchSelectedTab,
                     searchSongs = searchSongs,
                     searchAlbums = searchAlbums,
+                    searchArtists = searchArtists,
                     searchLocalSongs = searchLocalSongs,
                     selectedAlbum = selectedAlbum,
                     selectedArtist = selectedArtist,
@@ -390,6 +394,12 @@ fun MonoMusic(app: MonoMusic) {
                             query = searchQuery,
                             limit = 25,
                         )
+                        val artistResults = try {
+                            app.youTubeInnertubeClient.searchArtists(query = searchQuery, limit = 25)
+                        } catch (_: Exception) {
+                            emptyList()
+                        }
+                        searchArtists = artistResults.map { ArtistResultUiModel(it.artistId, it.name, it.subtitle) }
                         searchSongs = songResults.map {
                             SongUiModel(
                                 id = it.videoId,
@@ -401,6 +411,8 @@ fun MonoMusic(app: MonoMusic) {
                                 sourceType = "YOUTUBE",
                                 audioUri = it.videoId,
                                 album = it.album,
+                                artistId = it.artistId,
+                                albumId = it.albumId,
                             )
                         }
                         searchAlbums = albumResults.map { album ->
@@ -419,6 +431,7 @@ fun MonoMusic(app: MonoMusic) {
                 searchError = e.message ?: "Search failed"
                 searchSongs = emptyList()
                 searchAlbums = emptyList()
+                searchArtists = emptyList()
             } finally {
                 isSearching = false
             }
@@ -1152,11 +1165,12 @@ fun MonoMusic(app: MonoMusic) {
                         errorMessage = searchError,
                         songs = searchSongs,
                         albums = searchAlbums,
+                        artists = searchArtists,
                         localSongs = searchLocalSongs,
                         selectedTab = searchSelectedTab,
                         onSelectedTabChange = { searchSelectedTab = it },
                         onPlaySongClick = { song: SongUiModel ->
-                            if (song.sourceType == "LOCAL_FILE") {
+                            if (searchSelectedTab == SEARCH_TAB_LOCAL) {
                                 val index = searchLocalSongs.indexOfFirst { it.id == song.id }
                                 val startIndex = if (index >= 0) index else 0
                                 startPlaybackFromQueue(searchLocalSongs, startIndex)
@@ -1172,6 +1186,11 @@ fun MonoMusic(app: MonoMusic) {
                             navController.navigate(Screen.AlbumDetails.route) {
                                 launchSingleTop = true
                             }
+                        },
+                        onArtistClick = { artist ->
+                            selectedArtist = artist.name
+                            selectedArtistId = artist.id
+                            navController.navigate(Screen.ArtistDetails.route) { launchSingleTop = true }
                         },
                         librarySongIds = librarySongIds,
                     )

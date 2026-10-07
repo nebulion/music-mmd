@@ -47,11 +47,14 @@ fun ArtistDetailsScreen(
 ) {
     var songs by remember { mutableStateOf<List<SongUiModel>>(emptyList()) }
     var albums by remember { mutableStateOf<List<AlbumUiModel>>(emptyList()) }
+    var singles by remember { mutableStateOf<List<AlbumUiModel>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
-    val tabOptions = listOf("Albums", "Songs")
+    // Singles only when the artist has any (YouTube artists); at most three tabs.
+    val tabOptions = if (singles.isEmpty()) listOf("Albums", "Songs") else listOf("Albums", "Singles", "Songs")
+    val songsTab = tabOptions.lastIndex
 
     val playbackState by viewModel.playbackState.collectAsState()
     val currentSongId = playbackState.currentSongId
@@ -69,7 +72,8 @@ fun ArtistDetailsScreen(
             val content = viewModel.getArtistContent(artistId)
             songs = content.songs
             albums = content.albums
-            if (albums.isEmpty() && songs.isNotEmpty()) selectedTab = 1
+            singles = content.singles
+            if (albums.isEmpty() && singles.isEmpty() && songs.isNotEmpty()) selectedTab = 1
         } catch (e: Exception) {
             errorMessage = e.message ?: "Failed to load artist"
         } finally {
@@ -102,7 +106,7 @@ fun ArtistDetailsScreen(
                 }
             }
 
-            songs.isEmpty() && albums.isEmpty() -> {
+            songs.isEmpty() && albums.isEmpty() && singles.isEmpty() -> {
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center,
@@ -129,18 +133,19 @@ fun ArtistDetailsScreen(
                         }
                     }
 
-                    if (selectedTab == 0) {
-                        // Albums tab
+                    if (selectedTab < songsTab) {
+                        // Albums or Singles tab
+                        val shown = if (selectedTab == 0) albums else singles
                         LazyColumnMMD(
                             contentPadding = PaddingValues(16.dp),
                             verticalArrangement = Arrangement.Top,
                         ) {
-                            if (albums.isNotEmpty()) {
-                                items(albums) { album ->
+                            if (shown.isNotEmpty()) {
+                                items(shown) { album ->
                                     AlbumItem(
                                         album = album,
                                         onClick = { onAlbumClick(album) },
-                                        showDivider = album != albums.lastOrNull(),
+                                        showDivider = album != shown.lastOrNull(),
                                     )
                                 }
                             } else {

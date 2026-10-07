@@ -29,7 +29,7 @@ Read next: [ARCHITECTURE.md](ARCHITECTURE.md).
 | 0 | Fork, Windows build fixes, CI, new app id | Done |
 | 1 | Music keeps playing in the background | Done, **device check owed** |
 | 2 | The app remembers the last search / album / artist | Done, **device check owed** |
-| 3 | Artist search, artist pages with Albums and Singles | — |
+| 3 | Artist search, artist pages with Albums and Singles | Done, **device check owed** |
 | 4 | Wireframes (owner picks) | — |
 | 5 | Kompakt treatment (MMD kit, paging, type, no motion) | — |
 | 6 | Speed (R8, profiles, one paint) | — |
@@ -61,6 +61,21 @@ swiped away. `adb shell dumpsys power | grep -i wake` should show the app's lock
 
 **Device check owed:** search an artist, open an album, press Home, open another app for a while, come back →
 same album page, and Back returns to the same search results.
+
+### Phase 3 — what changed
+- It was the app, not YouTube Music: the artists search filter and artist pages exist, the app never asked.
+- Search has an **Artists** tab (Songs · Albums · Artists · Local). Four tabs breaks MMD's 2–3 rule on purpose
+  for now; the Phase 4 wireframes settle the layout.
+- Tapping a YouTube artist opens its page: **Albums · Singles · Songs**. Albums and Singles are the full
+  discography (the page's "More" lists), not just the ten on the artist page. Albums open as before.
+- Song results now keep their artist and album ids (`SongUiModel.artistId` / `albumId`), ready for
+  "tap the artist name" in the Phase 5 screens.
+- `InnertubeArtistParser.kt`, tested against saved "radiohead" responses in `src/test/resources/innertube/`.
+  If YouTube changes its format, these fixtures are the place to refresh.
+- Not done: "more results" for searches (continuation pages) — moved to Phase 5 with paging.
+
+**Device check owed:** search "radiohead" → Artists → Radiohead → Albums lists all studio albums (15) →
+OK Computer plays; Singles tab shows singles and EPs.
 
 ## Owner's decisions
 - 2026-10-07: fork MonoMusic only; CalmMusic compared and not used.
