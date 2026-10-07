@@ -30,7 +30,7 @@ Read next: [ARCHITECTURE.md](ARCHITECTURE.md).
 | 1 | Music keeps playing in the background | Done, **device check owed** |
 | 2 | The app remembers the last search / album / artist | Done, **device check owed** |
 | 3 | Artist search, artist pages with Albums and Singles | Done, **device check owed** |
-| 4 | Wireframes (owner picks) | — |
+| 4 | Wireframes (owner picks) | Done: 1A 2B 3A 4C |
 | 5 | Kompakt treatment (MMD kit, paging, type, no motion) | — |
 | 6 | Speed (R8, profiles, one paint) | — |
 
@@ -82,3 +82,9 @@ OK Computer plays; Singles tab shows singles and EPs.
 - 2026-10-07: full Kompakt treatment, like Macros and Fit.
 - 2026-10-07: the "Now Playing" text button in the top right should become some other control — options
   go in the Phase 4 wireframes.
+- 2026-10-07, wireframes (`docs/mockups/music-options.html`):
+  - **1A** — a playing strip (song · artist · play/pause) above the bottom tabs replaces the "Now Playing" pill.
+  - **2B** — search has three tabs: Songs · Albums · Artists; library matches sit at the top of Songs (marked ✓),
+    the Local tab goes away.
+  - **3A** — artist page tabs Albums · Singles · Songs (as built); shuffle moves to the top bar.
+  - **4C** — Now Playing keeps the slider and position updating every second (owner's choice, like Fit's rest timer).
