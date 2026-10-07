@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Music, MMD options</title>
+<style>
+/* Kompakt screens at 2/3 of 480x800 px: app dp x 0.889 = px here (21sp label = 18.7px, 76dp row = 67.5px). */
+:root { --paper:#fff; --ink:#000; --ground:#efeee9; --font:system-ui,"Roboto","Helvetica Neue",Arial,sans-serif; color-scheme:light; }
+* { box-sizing:border-box; }
+body { background:var(--ground); color:var(--ink); font-family:var(--font); margin:0; }
+.wrap { max-width:1400px; margin:0 auto; padding:28px 16px 56px; }
+h1 { font-size:30px; font-weight:900; margin:0 0 8px; }
+.lede { font-size:16px; line-height:1.5; max-width:78ch; margin:0 0 6px; }
+section { padding-block:24px; border-top:2px solid var(--ink); }
+section > h2 { font-size:22px; font-weight:900; margin:0 0 6px; }
+section > p { font-size:15px; line-height:1.5; max-width:80ch; margin:0 0 14px; }
+.grid { display:flex; flex-wrap:wrap; gap:26px; align-items:flex-start; }
+figure { margin:0; width:320px; max-width:100%; }
+figcaption { margin-top:10px; font-size:14px; line-height:1.45; }
+figcaption b { font-size:16px; font-weight:900; display:block; margin-bottom:2px; }
+.cur, .rec { display:inline-block; font-size:11px; font-weight:700; padding:1px 8px; border-radius:999px; margin-left:6px; vertical-align:2px; }
+.cur { border:1.5px solid var(--ink); background:var(--paper); }
+.rec { background:var(--ink); color:var(--paper); }
+
+.phone { width:320px; height:534px; background:var(--paper); border:2px solid var(--ink); border-radius:18px; overflow:hidden; display:flex; flex-direction:column; }
+.status { height:30px; flex:none; display:flex; justify-content:space-between; align-items:center; padding:0 14px; font-size:15px; font-weight:500; }
+.top { height:57px; flex:none; display:flex; align-items:center; gap:8px; padding:0 10px 0 12px; border-bottom:2.7px solid var(--ink); }
+.top .t { flex:1; font-size:21px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.top .i { font-size:19px; width:30px; text-align:center; flex:none; }
+.top .i.on { background:var(--ink); color:var(--paper); border-radius:8px; height:30px; line-height:30px; }
+.btn { flex:none; font-size:13px; font-weight:700; padding:6px 10px; border-radius:8px; background:var(--ink); color:var(--paper); }
+.pill { flex:1; height:40px; border:1.8px solid var(--ink); border-radius:99px; display:flex; align-items:center; gap:8px; padding:0 14px; font-size:16px; }
+.body { flex:1; overflow:hidden; min-height:0; position:relative; }
+.tabs { display:flex; height:40px; border-bottom:1.5px solid var(--ink); flex:none; }
+.tabs div { flex:1; display:flex; align-items:center; justify-content:center; font-size:14px; }
+.tabs div.on { font-weight:900; box-shadow:inset 0 -3px 0 var(--ink); }
+.chips { display:flex; gap:6px; padding:8px 10px; flex:none; flex-wrap:nowrap; }
+.chip { border:1.8px solid var(--ink); border-radius:16px; height:28px; padding:0 10px; display:flex; align-items:center; font-size:13px; }
+.chip.on { background:var(--ink); color:var(--paper); }
+.sect { font-size:14px; font-weight:700; padding:10px 14px 2px; display:flex; justify-content:space-between; }
+.row { height:67.5px; display:flex; align-items:center; gap:12px; padding:0 10px 0 14px; position:relative; }
+.row::after { content:""; position:absolute; left:14px; right:0; bottom:0; border-bottom:1.2px dotted var(--ink); }
+.row.last::after { display:none; }
+.row.one { height:52px; }
+.row .g { flex:1; min-width:0; }
+.row .l { font-size:18.7px; font-weight:900; line-height:20px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.row .l.n { font-weight:400; }
+.row .s2 { font-size:16px; line-height:16px; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.chev { font-size:18px; width:20px; text-align:center; flex:none; }
+.nav { height:51px; flex:none; border-top:1.8px solid var(--ink); display:flex; }
+.nav div { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:12.5px; gap:2px; }
+.nav div span { font-size:15px; }
+.nav div.on { font-weight:900; box-shadow:inset 0 -3.5px 0 var(--ink); }
+.mini { height:52px; flex:none; border-top:2.7px solid var(--ink); display:flex; align-items:center; gap:10px; padding:0 10px 0 14px; }
+.mini .g { flex:1; min-width:0; }
+.mini .l { font-size:16px; font-weight:900; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.mini .s2 { font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.mini .pp { width:38px; height:38px; border:1.8px solid var(--ink); border-radius:50%; display:grid; place-items:center; font-size:15px; flex:none; }
+.np { padding:18px 16px 0; display:flex; flex-direction:column; gap:6px; }
+.np .title { font-size:28px; font-weight:900; line-height:1.1; }
+.np .artist { font-size:18px; text-decoration:underline; }
+.np .album { font-size:16px; }
+.np .time { font-size:16px; margin-top:12px; }
+.bar { height:8px; border:1.2px solid var(--ink); border-radius:4px; margin-top:8px; position:relative; }
+.bar i { position:absolute; left:0; top:0; bottom:0; width:45%; background:var(--ink); }
+.ctrls { display:flex; justify-content:space-around; align-items:center; margin-top:22px; }
+.ctrls div { width:52px; height:52px; border:1.8px solid var(--ink); border-radius:50%; display:grid; place-items:center; font-size:20px; }
+.ctrls div.big { width:64px; height:64px; background:var(--ink); color:var(--paper); font-size:24px; }
+.small { display:flex; justify-content:space-around; margin-top:18px; font-size:14px; }
+.small span { border:1.5px solid var(--ink); border-radius:8px; padding:4px 10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>Music — pick one letter per question</h1>
+<p class="lede">Four decisions for the Kompakt treatment (Phase 5). Screens are 2/3 of the Kompakt's size. Everything else in Phase 5 follows the rules you already set: MMD parts, system font, page-turn lists, no motion.</p>
+
+<!-- ============ 1. NOW PLAYING ACCESS ============ -->
+<section>
+<h2>1 · Getting to Now Playing (replaces the "Now Playing" button)</h2>
+<p>Today: a solid black "Now Playing" pill in every top bar. It takes room from the title and is a second primary button on the screen.</p>
+<div class="grid">
+
+<figure>
+<div class="phone">
+  <div class="status"><span>7:59</span><span>▮▮▮</span></div>
+  <div class="top"><div class="t">Songs</div><div class="i">⌕</div><div class="btn">Now Playing</div></div>
+  <div class="body">
+    <div class="row"><div class="g"><div class="l">Riders in the Sky</div><div class="s2">Charley Crockett · 3:27</div></div></div>
+    <div class="row"><div class="g"><div class="l">27</div><div class="s2">Passenger · 3:20</div></div></div>
+    <div class="row"><div class="g"><div class="l">5 Years Time</div><div class="s2">Noah and the Whale · 3:34</div></div></div>
+    <div class="row"><div class="g"><div class="l">A Little More Country</div><div class="s2">Easton Corbin · 2:52</div></div></div>
+    <div class="row last"><div class="g"><div class="l">A Lot to Learn</div><div class="s2">Easton Corbin · 3:46</div></div></div>
+  </div>
+  <div class="nav"><div><span>♫</span>Playlists</div><div><span>☺</span>Artists</div><div class="on"><span>≡</span>Songs</div><div><span>◉</span>Albums</div><div><span>…</span>More</div></div>
+</div>
+<figcaption><b>Now <span class="cur">current</span></b>Pill button, top right.</figcaption>
+</figure>
+
+<figure>
+<div class="phone">
+  <div class="status"><span>7:59</span><span>▮▮▮</span></div>
+  <div class="top"><div class="t">Songs</div><div class="i">⌕</div></div>
+  <div class="body">
+    <div class="row"><div class="g"><div class="l">Riders in the Sky</div><div class="s2">Charley Crockett · 3:27</div></div></div>
+    <div class="row"><div class="g"><div class="l">27</div><div class="s2">Passenger · 3:20</div></div></div>
+    <div class="row"><div class="g"><div class="l">5 Years Time</div><div class="s2">Noah and the Whale · 3:34</div></div></div>
+    <div class="row last"><div class="g"><div class="l">A Little More Country</div><div class="s2">Easton Corbin · 2:52</div></div></div>
+  </div>
+  <div class="mini"><div class="g"><div class="l">Reckoner</div><div class="s2">Radiohead</div></div><div class="pp">❚❚</div></div>
+  <div class="nav"><div><span>♫</span>Playlists</div><div><span>☺</span>Artists</div><div class="on"><span>≡</span>Songs</div><div><span>◉</span>Albums</div><div><span>…</span>More</div></div>
+</div>
+<figcaption><b>A · Playing strip <span class="rec">suggested</span></b>One line above the tabs: song, artist, play/pause. Tap the strip for Now Playing. Repaints only when the song changes. Costs one list row.</figcaption>
+</figure>
+
+<figure>
+<div class="phone">
+  <div class="status"><span>7:59</span><span>▮▮▮</span></div>
+  <div class="top"><div class="t">Songs</div><div class="i">⌕</div><div class="i on">♪</div></div>
+  <div class="body">
+    <div class="row"><div class="g"><div class="l">Riders in the Sky</div><div class="s2">Charley Crockett · 3:27</div></div></div>
+    <div class="row"><div class="g"><div class="l">27</div><div class="s2">Passenger · 3:20</div></div></div>
+    <div class="row"><div class="g"><div class="l">5 Years Time</div><div class="s2">Noah and the Whale · 3:34</div></div></div>
+    <div class="row"><div class="g"><div class="l">A Little More Country</div><div class="s2">Easton Corbin · 2:52</div></div></div>
+    <div class="row last"><div class="g"><div class="l">A Lot to Learn</div><div class="s2">Easton Corbin · 3:46</div></div></div>
+  </div>
+  <div class="nav"><div><span>♫</span>Playlists</div><div><span>☺</span>Artists</div><div class="on"><span>≡</span>Songs</div><div><span>◉</span>Albums</div><div><span>…</span>More</div></div>
+</div>
+<figcaption><b>B · Note icon in the top bar</b>A ♪ icon next to search; inverted (black) while playing, outline when paused. Smallest change, no list space lost, but you don't see what's playing.</figcaption>
+</figure>
+
+<figure>
+<div class="phone">
+  <div class="status"><span>7:59</span><span>▮▮▮</span></div>
+  <div class="top"><div class="t">Songs</div><div class="i">⌕</div><div class="i">⚙</div></div>
+  <div class="body">
+    <div class="row"><div class="g"><div class="l">Riders in the Sky</div><div class="s2">Charley Crockett · 3:27</div></div></div>
+    <div class="row"><div class="g"><div class="l">27</div><div class="s2">Passenger · 3:20</div></div></div>
+    <div class="row"><div class="g"><div class="l">5 Years Time</div><div class="s2">Noah and the Whale · 3:34</div></div></div>
+    <div class="row"><div class="g"><div class="l">A Little More Country</div><div class="s2">Easton Corbin · 2:52</div></div></div>
+    <div class="row last"><div class="g"><div class="l">A Lot to Learn</div><div class="s2">Easton Corbin · 3:46</div></div></div>
+  </div>
+  <div class="nav"><div><span>♫</span>Playlists</div><div><span>☺</span>Artists</div><div class="on"><span>≡</span>Songs</div><div><span>◉</span>Albums</div><div><span>▶</span>Playing</div></div>
+</div>
+<figcaption><b>C · "Playing" tab</b>Now Playing becomes the fifth tab, replacing More. Downloads, Radio and Settings move to ⚙ in the top bar. Still 5 tabs (MMD says 2–4).</figcaption>
+</figure>
+</div>
+</section>
+
+<!-- ============ 2. SEARCH ============ -->
+<section>
+<h2>2 · Search results (Songs · Albums · Artists · Local is 4 tabs; MMD allows 3)</h2>
+<div class="grid">
+
+<figure>
+<div class="phone">
+  <div class="status"><span>7:59</span><span>▮▮▮</span></div>
+  <div class="top"><div class="i">←</div><div class="pill">⌕ radiohead</div></div>
+  <div class="body">
+    <div class="sect"><span>Artists</span><span>All ›</span></div>
+    <div class="row one"><div class="g"><div class="l">Radiohead</div></div><div class="chev">›</div></div>
+    <div class="sect"><span>Albums</span><span>All ›</span></div>
+    <div class="row"><div class="g"><div class="l">OK Computer</div><div class="s2">Radiohead · 1997</div></div></div>
+    <div class="row last"><div class="g"><div class="l">In Rainbows</div><div class="s2">Radiohead · 2007</div></div></div>
+    <div class="sect"><span>Songs</span><span>All ›</span></div>
+    <div class="row last"><div class="g"><div class="l">Creep</div><div class="s2">Radiohead · 3:58</div></div></div>
+  </div>
+</div>
+<figcaption><b>A · Best of each, then "All ›" <span class="rec">suggested</span></b>One page: top artist, 2 albums, songs. "All ›" opens the full list as its own page. Library matches appear first in each section, marked ✓. No tabs at all.</figcaption>
+</figure>
+
+<figure>
+<div class="phone">
+  <div class="status"><span>7:59</span><span>▮▮▮</span></div>
+  <div class="top"><div class="i">←</div><div class="pill">⌕ radiohead</div></div>
+  <div class="tabs"><div>Songs</div><div>Albums</div><div class="on">Artists</div></div>
+  <div class="body">
+    <div class="row"><div class="g"><div class="l">Radiohead</div><div class="s2">207M monthly audience</div></div></div>
+    <div class="row"><div class="g"><div class="l">Thom Yorke</div><div class="s2">939K monthly audience</div></div></div>
+    <div class="row"><div class="g"><div class="l">Kendrick Lamar</div><div class="s2">159M monthly audience</div></div></div>
+    <div class="row last"><div class="g"><div class="l">Amnesiac Quartet</div><div class="s2">86 subscribers</div></div></div>
+  </div>
+</div>
+<figcaption><b>B · Three tabs, library mixed in</b>Songs · Albums · Artists. Your library's matches sit at the top of Songs, marked ✓; the Local tab goes away.</figcaption>
+</figure>
+
+<figure>
+<div class="phone">
+  <div class="status"><span>7:59</span><span>▮▮▮</span></div>
+  <div class="top"><div class="i">←</div><div class="pill">⌕ radiohead</div></div>
+  <div class="chips"><div class="chip">Songs</div><div class="chip">Albums</div><div class="chip on">Artists</div><div class="chip">Library</div></div>
+  <div class="body">
+    <div class="row"><div class="g"><div class="l">Radiohead</div><div class="s2">207M monthly audience</div></div></div>
+    <div class="row"><div class="g"><div class="l">Thom Yorke</div><div class="s2">939K monthly audience</div></div></div>
+    <div class="row"><div class="g"><div class="l">Kendrick Lamar</div><div class="s2">159M monthly audience</div></div></div>
+    <div class="row last"><div class="g"><div class="l">Amnesiac Quartet</div><div class="s2">86 subscribers</div></div></div>
+  </div>
+</div>
+<figcaption><b>C · Filter chips</b>Four MMD filter chips instead of tabs (chips have no count limit). Same four lists as today.</figcaption>
+</figure>
+</div>
+</section>
+
+<!-- ============ 3. ARTIST PAGE ============ -->
+<section>
+<h2>3 · Artist page</h2>
+<div class="grid">
+
+<figure>
+<div class="phone">
+  <div class="status"><span>7:59</span><span>▮▮▮</span></div>
+  <div class="top"><div class="i">←</div><div class="t">Radiohead</div><div class="i">⤨</div></div>
+  <div class="tabs"><div class="on">Albums</div><div>Singles</div><div>Songs</div></div>
+  <div class="body">
+    <div class="row"><div class="g"><div class="l">KID A MNESIA</div><div class="s2">2021</div></div></div>
+    <div class="row"><div class="g"><div class="l">A Moon Shaped Pool</div><div class="s2">2016</div></div></div>
+    <div class="row"><div class="g"><div class="l">The King Of Limbs</div><div class="s2">2011</div></div></div>
+    <div class="row"><div class="g"><div class="l">In Rainbows</div><div class="s2">2007</div></div></div>
+    <div class="row last"><div class="g"><div class="l">Hail To the Thief</div><div class="s2">2003</div></div></div>
+  </div>
+</div>
+<figcaption><b>A · Three tabs <span class="cur">built</span> <span class="rec">suggested</span></b>Albums · Singles · Songs (top songs). Shuffle moves from the floating button to the top bar.</figcaption>
+</figure>
+
+<figure>
+<div class="phone">
+  <div class="status"><span>7:59</span><span>▮▮▮</span></div>
+  <div class="top"><div class="i">←</div><div class="t">Radiohead</div><div class="i">⤨</div></div>
+  <div class="body">
+    <div class="sect"><span>Top songs</span></div>
+    <div class="row"><div class="g"><div class="l">Creep</div><div class="s2">Pablo Honey</div></div></div>
+    <div class="row last"><div class="g"><div class="l">No Surprises</div><div class="s2">OK Computer</div></div></div>
+    <div class="sect"><span>Discography</span></div>
+    <div class="row one"><div class="g"><div class="l n">Albums · 15</div></div><div class="chev">›</div></div>
+    <div class="row one last"><div class="g"><div class="l n">Singles &amp; EPs · 24</div></div><div class="chev">›</div></div>
+  </div>
+</div>
+<figcaption><b>B · Summary, details a tap away</b>Pinned top songs, then rows that open the album and singles lists as their own pages (pattern A2).</figcaption>
+</figure>
+</div>
+</section>
+
+<!-- ============ 4. NOW PLAYING ============ -->
+<section>
+<h2>4 · Now Playing (no ticking)</h2>
+<p>Today a slider and the position text repaint every second. Pick how time is shown.</p>
+<div class="grid">
+
+<figure>
+<div class="phone">
+  <div class="status"><span>7:59</span><span>▮▮▮</span></div>
+  <div class="top"><div class="i">✕</div><div class="t"></div><div class="i">⋮</div></div>
+  <div class="body np">
+    <div class="title">Reckoner</div>
+    <div class="artist">Radiohead</div>
+    <div class="album">In Rainbows</div>
+    <div class="time">Ends 20:04 · 4:50</div>
+    <div class="ctrls"><div>⏮</div><div class="big">❚❚</div><div>⏭</div></div>
+    <div class="small"><span>Shuffle</span><span>Repeat</span><span>Queue</span></div>
+  </div>
+</div>
+<figcaption><b>A · "Ends at" <span class="rec">suggested</span></b>One repaint per song (pattern C2). Tap the time line to see the exact position once. Artist name opens the artist page.</figcaption>
+</figure>
+
+<figure>
+<div class="phone">
+  <div class="status"><span>7:59</span><span>▮▮▮</span></div>
+  <div class="top"><div class="i">✕</div><div class="t"></div><div class="i">⋮</div></div>
+  <div class="body np">
+    <div class="title">Reckoner</div>
+    <div class="artist">Radiohead</div>
+    <div class="album">In Rainbows</div>
+    <div class="time">2:10 / 4:50</div>
+    <div class="bar"><i></i></div>
+    <div class="ctrls"><div>⏮</div><div class="big">❚❚</div><div>⏭</div></div>
+    <div class="small"><span>Shuffle</span><span>Repeat</span><span>Queue</span></div>
+  </div>
+</div>
+<figcaption><b>B · Bar, every 10 seconds</b>MMD progress bar and position, updated every 10 s instead of every second. Tap the bar to seek.</figcaption>
+</figure>
+
+<figure>
+<div class="phone">
+  <div class="status"><span>7:59</span><span>▮▮▮</span></div>
+  <div class="top"><div class="i">✕</div><div class="t"></div><div class="i">⋮</div></div>
+  <div class="body np">
+    <div class="title">Reckoner</div>
+    <div class="artist">Radiohead</div>
+    <div class="album">In Rainbows</div>
+    <div class="time">2:10 / 4:50</div>
+    <div class="bar"><i></i></div>
+    <div class="ctrls"><div>⏮</div><div class="big">❚❚</div><div>⏭</div></div>
+    <div class="small"><span>Shuffle</span><span>Repeat</span><span>Queue</span></div>
+  </div>
+</div>
+<figcaption><b>C · Keep every second <span class="cur">current</span></b>As today (like Fit's rest timer, by choice).</figcaption>
+</figure>
+</div>
+</section>
+
+</div>
+</body>
+</html>
