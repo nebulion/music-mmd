@@ -65,6 +65,11 @@ class YouTubePrecacheManager(private val app: MonoMusic) {
         }
     }
 
+    /** Forget a URL that stopped working (expired), so the next load resolves it again. */
+    fun invalidate(videoId: String) {
+        synchronized(urlCache) { urlCache.remove(videoId) }
+    }
+
     fun precacheSearchResults(videoIds: List<String>) {
         synchronized(this) {
             searchWindowIds.clear()
@@ -119,11 +124,7 @@ class YouTubePrecacheManager(private val app: MonoMusic) {
                         return@launch
                     }
 
-                    val (url, resolverLabel) = try {
-                        app.youTubeInnertubeClient.getBestAudioUrl(videoId) to "Innertube/Piped"
-                    } catch (_: Exception) {
-                        app.youTubeStreamResolver.getBestAudioUrl(videoId) to "NewPipe"
-                    }
+                    val (url, resolverLabel) = app.resolveAudioUrl(videoId)
                     putUrl(videoId, url, resolverLabel, now)
 
                     prefetchBytesIntoCache(videoId, url)

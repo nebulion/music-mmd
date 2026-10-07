@@ -287,13 +287,12 @@ class MonoMusicViewModel(
 
     /**
      * Mirrors the player into [PlaybackState] once a second: position, buffering,
-     * and the queue index (the player advances on its own). Also keeps the
-     * YouTube precache window centered on the playing song.
+     * and the queue index (the player advances on its own). The playback
+     * service keeps the YouTube precache window, so it works in the background.
      */
     fun startLocalPlaybackMonitoring(controller: MediaController) {
         playbackMonitorJob?.cancel()
         playbackMonitorJob = viewModelScope.launch {
-            var lastPrecacheIndex: Int? = null
             var lastPersistElapsedMs = 0L
 
             while (true) {
@@ -328,18 +327,6 @@ class MonoMusicViewModel(
                             nowPlayingSong = newSong,
                             nowPlayingDurationMs = newSong.durationMillis ?: newState.nowPlayingDurationMs,
                         )
-                    }
-                }
-
-                val currentIndex = newState.playbackQueueIndex
-                if (currentIndex != null && currentIndex in queue.indices && currentIndex != lastPrecacheIndex) {
-                    lastPrecacheIndex = currentIndex
-                    val windowIds = (-5..5).mapNotNull { offset ->
-                        queue.getOrNull(currentIndex + offset)
-                            ?.takeIf { it.sourceType == "YOUTUBE" }?.id
-                    }
-                    if (windowIds.isNotEmpty()) {
-                        app.youTubePrecacheManager.updateQueueWindow(windowIds)
                     }
                 }
 

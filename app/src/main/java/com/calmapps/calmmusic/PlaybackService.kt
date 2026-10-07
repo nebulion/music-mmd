@@ -5,11 +5,15 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.os.Handler
+import android.os.Looper
 import androidx.annotation.OptIn
 import androidx.core.net.toUri
 import androidx.media3.common.C
+import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.Timeline
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultDataSource
@@ -26,6 +30,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import okhttp3.ConnectionPool
 import okhttp3.OkHttpClient
+import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 /**
@@ -33,18 +38,23 @@ import java.util.concurrent.TimeUnit
  */
 class PlaybackService : MediaSessionService() {
     private var mediaSession: MediaSession? = null
+    private val handler = Handler(Looper.getMainLooper())
+
+    /** Retries spent on the current song; reset when a song starts playing. */
+    private var retries = 0
 
     companion object {
         private const val NOTIFICATION_ID = 1001
         private const val CHANNEL_ID = "calmmusic_playback_channel"
-        private var errorCallback: ((PlaybackException) -> Unit)? = null
+        private var skipNotice: ((String) -> Unit)? = null
 
         private const val NEWPIPE_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0"
 
         private const val BYPASS_COOKIES = "SOCS=CAI; VISITOR_INFO1_LIVE=i7Sm6Qgj0lE; CONSENT=YES+cb.20210328-17-p0.en+FX+475"
 
-        fun registerErrorCallback(callback: ((PlaybackException) -> Unit)?) {
-            errorCallback = callback
+        /** Told the title of each song skipped because it couldn't be played. */
+        fun registerSkipNotice(callback: ((String) -> Unit)?) {
+            skipNotice = callback
         }
     }
 
@@ -68,6 +78,9 @@ class PlaybackService : MediaSessionService() {
         val player = ExoPlayer.Builder(this)
             .setMediaSourceFactory(mediaSourceFactory)
             .setLoadControl(loadControl)
+            // Keep the CPU and Wi-Fi awake while playing: without this the phone
+            // sleeps with the screen off and streaming stops once the buffer runs out.
+            .setWakeMode(C.WAKE_MODE_NETWORK)
             .build()
 
         val audioAttributes = androidx.media3.common.AudioAttributes.Builder()
@@ -80,8 +93,20 @@ class PlaybackService : MediaSessionService() {
 
         player.addListener(object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) {
-                errorCallback?.invoke(error)
-                super.onPlayerError(error)
+                recoverFrom(player, error)
+            }
+
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                if (isPlaying) retries = 0
+            }
+
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                retries = 0
+                updatePrecacheWindow(player)
+            }
+
+            override fun onTimelineChanged(timeline: Timeline, reason: Int) {
+                updatePrecacheWindow(player)
             }
         })
 
@@ -105,6 +130,51 @@ class PlaybackService : MediaSessionService() {
             .build()
 
         setMediaNotificationProvider(notificationProvider)
+    }
+
+    /**
+     * Recovery lives here, not in the UI, so it works with the app closed.
+     * See [errorAction] for what is retried, skipped or paused on.
+     */
+    private fun recoverFrom(player: ExoPlayer, error: PlaybackException) {
+        val item = player.currentMediaItem
+        when (errorAction(error, retries)) {
+            ErrorAction.RETRY -> {
+                // The stream URL may have expired: resolve it again.
+                item?.mediaId?.let { (application as MonoMusic).youTubePrecacheManager.invalidate(it) }
+                val delayMs = retryDelayMs(retries)
+                retries++
+                handler.postDelayed({
+                    if (player.playerError != null && player.currentMediaItem == item) player.prepare()
+                }, delayMs)
+            }
+            ErrorAction.SKIP -> {
+                retries = 0
+                skipNotice?.invoke(item?.mediaMetadata?.title?.toString() ?: "This song")
+                if (player.hasNextMediaItem()) {
+                    player.seekToNextMediaItem()
+                    player.prepare()
+                }
+            }
+            ErrorAction.PAUSE -> {
+                retries = 0
+                player.playWhenReady = false
+                player.prepare()
+            }
+        }
+    }
+
+    /** Pre-resolves YouTube stream URLs for the five songs either side of the playing one. */
+    private fun updatePrecacheWindow(player: Player) {
+        val index = player.currentMediaItemIndex
+        if (index == C.INDEX_UNSET || player.mediaItemCount == 0) return
+        val ids = (-5..5).mapNotNull { offset ->
+            val i = index + offset
+            if (i < 0 || i >= player.mediaItemCount) return@mapNotNull null
+            val item = player.getMediaItemAt(i)
+            item.mediaId.takeIf { item.localConfiguration?.uri?.host == "www.youtube.com" }
+        }
+        if (ids.isNotEmpty()) (application as MonoMusic).youTubePrecacheManager.updateQueueWindow(ids)
     }
 
     @OptIn(UnstableApi::class)
@@ -146,12 +216,15 @@ class PlaybackService : MediaSessionService() {
                 return@Factory dataSpec.withUri(cachedUrl.toUri())
             }
 
-            val (resolvedUrl, resolverLabel) = runBlocking(Dispatchers.IO) {
-                try {
-                    app.youTubeInnertubeClient.getBestAudioUrl(videoId) to "Innertube/Piped"
-                } catch (_: Exception) {
-                    app.youTubeStreamResolver.getBestAudioUrl(videoId) to "NewPipe"
-                }
+            // Any failure surfaces as an IOException, so the player reports a
+            // network-type error and recoverFrom() retries it (or skips, when
+            // the cause says the video can't be played).
+            val (resolvedUrl, resolverLabel) = try {
+                runBlocking(Dispatchers.IO) { app.resolveAudioUrl(videoId) }
+            } catch (e: IOException) {
+                throw e
+            } catch (e: Exception) {
+                throw IOException("Couldn't resolve the stream for $videoId", e)
             }
             precache.putUrl(videoId, resolvedUrl, resolverLabel, now)
             app.streamResolverLabel.value = resolverLabel
@@ -179,9 +252,13 @@ class PlaybackService : MediaSessionService() {
         notificationManager.createNotificationChannel(channel)
     }
 
+    /** Swiping the app away keeps music playing; with nothing playing the service ends. */
     override fun onTaskRemoved(rootIntent: Intent?) {
-        mediaSession?.player?.stop()
-        stopSelf()
+        val player = mediaSession?.player
+        if (player == null || !player.playWhenReady || player.mediaItemCount == 0) {
+            player?.stop()
+            stopSelf()
+        }
         super.onTaskRemoved(rootIntent)
     }
 
@@ -189,6 +266,7 @@ class PlaybackService : MediaSessionService() {
         mediaSession
 
     override fun onDestroy() {
+        handler.removeCallbacksAndMessages(null)
         mediaSession?.run {
             player.release()
             release()

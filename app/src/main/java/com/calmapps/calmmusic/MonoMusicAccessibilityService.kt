@@ -101,7 +101,7 @@ class MonoMusicAccessibilityService : AccessibilityService() {
 
     private fun returnToApp() {
         try {
-            val intent = packageManager.getLaunchIntentForPackage("com.calmapps.calmmusic")
+            val intent = packageManager.getLaunchIntentForPackage(packageName)
             if (intent != null) {
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
                 intent.putExtra("FROM_RADIO_TUNER", true)

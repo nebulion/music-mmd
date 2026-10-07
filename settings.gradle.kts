@@ -16,5 +16,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "MonoMusic"
+rootProject.name = "music-mmd"
 include(":app")

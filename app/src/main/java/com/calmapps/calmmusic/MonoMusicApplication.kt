@@ -47,6 +47,23 @@ class MonoMusic : Application() {
         YouTubePrecacheManager(this)
     }
 
+    /**
+     * Stream URL for a YouTube video and the resolver that produced it. NewPipe
+     * first (it talks to YouTube directly); public Piped instances are often down,
+     * so Piped is only the fallback. Unplayable content is not retried on Piped.
+     */
+    suspend fun resolveAudioUrl(videoId: String): Pair<String, String> =
+        try {
+            youTubeStreamResolver.getBestAudioUrl(videoId) to "NewPipe"
+        } catch (e: Exception) {
+            if (isContentUnavailable(e)) throw e
+            try {
+                youTubeInnertubeClient.getBestAudioUrl(videoId) to "Piped"
+            } catch (_: Exception) {
+                throw e
+            }
+        }
+
     /** Which resolver produced the current stream URL; shown on Now Playing. */
     val streamResolverLabel = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
 

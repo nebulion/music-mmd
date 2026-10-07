@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.Activity
 import android.content.ComponentName
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
@@ -125,6 +126,17 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Android 13+: without this the playback notification (and its controls) is hidden.
+        // Asked once, on a fresh start only. The Kompakt (Android 12) never asks.
+        if (savedInstanceState == null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            val prefs = getSharedPreferences("calmmusic_settings", MODE_PRIVATE)
+            if (!prefs.getBoolean("asked_notifications", false)) {
+                prefs.edit().putBoolean("asked_notifications", true).apply()
+                requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 0)
+            }
+        }
         setContent {
             ThemeMMD {
                 MonoMusic(app)
@@ -617,31 +629,13 @@ fun MonoMusic(app: MonoMusic) {
         val controller = localMediaController ?: return@LaunchedEffect
         viewModel.startLocalPlaybackMonitoring(controller)
 
-        PlaybackService.registerErrorCallback { error ->
-            var cause: Throwable? = error
-            var lastCause: Throwable? = null
-            while (cause != null && cause !== lastCause) {
-                lastCause = cause
-                cause = cause.cause
-            }
-            val root = lastCause ?: error
-            val className = root.javaClass.name
-            val message = root.message ?: error.message ?: ""
-
-            val isNewPipeContentNotAvailable =
-                className == "org.schabi.newpipe.extractor.exceptions.ContentNotAvailableException" ||
-                        message.contains("page needs to be reloaded", ignoreCase = true) ||
-                        message.contains("ContentNotAvailable", ignoreCase = true)
-
-            if (isNewPipeContentNotAvailable) {
-                libraryScope.launch {
-                    snackbarHostState.showSnackbar(
-                        message = "YouTube reported this track can't be played. Skipping.",
-                        withDismissAction = false,
-                        duration = SnackbarDurationMMD.Short,
-                    )
-                }
-                viewModel.playNextInQueue(controller)
+        PlaybackService.registerSkipNotice { title ->
+            libraryScope.launch {
+                snackbarHostState.showSnackbar(
+                    message = "Can't play “$title”. Skipped.",
+                    withDismissAction = false,
+                    duration = SnackbarDurationMMD.Short,
+                )
             }
         }
     }

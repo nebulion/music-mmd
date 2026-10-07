@@ -9,7 +9,7 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.calmapps.calmmusic"
+        applicationId = "com.musicmmd"
         // MediaStore RELATIVE_PATH/IS_PENDING (download storage) need API 29.
         minSdk = 29
         targetSdk = 35
@@ -45,6 +45,9 @@ android {
     // on debuggable apps. Compressed libs are exempt from the check.
     packaging { jniLibs { useLegacyPackaging = true } }
 
+    // Media3 classes touch android.os APIs; let JVM tests get default values.
+    testOptions { unitTests.isReturnDefaultValues = true }
+
     buildFeatures {
         compose = true
         buildConfig = true
@@ -68,7 +71,7 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.7.0")
 
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("androidx.media3:media3-datasource-okhttp:1.2.0")
+    implementation("androidx.media3:media3-datasource-okhttp:1.3.1")
 
     val composeBom = platform("androidx.compose:compose-bom:2024.06.00")
     implementation(composeBom)
