@@ -2,6 +2,8 @@ package com.calmapps.calmmusic.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.calmapps.calmmusic.ui.SongUiModel
+import org.json.JSONArray
 
 /**
  * Lightweight persistence layer for capturing the now playing snapshot so it
@@ -14,6 +16,8 @@ data class NowPlayingSnapshot(
     val positionMs: Long,
     val repeatModeKey: String,
     val isShuffleOn: Boolean,
+    /** The queue's songs, so YouTube songs that aren't in the library come back too. */
+    val queueSongs: List<SongUiModel> = emptyList(),
 )
 
 class NowPlayingStorage(context: Context) {
@@ -29,6 +33,7 @@ class NowPlayingStorage(context: Context) {
             .putLong(KEY_POSITION_MS, snapshot.positionMs)
             .putString(KEY_REPEAT_MODE, snapshot.repeatModeKey)
             .putBoolean(KEY_IS_SHUFFLE_ON, snapshot.isShuffleOn)
+            .putString(KEY_QUEUE_SONGS, snapshot.queueSongs.songsToJson().toString())
             .apply()
     }
 
@@ -47,6 +52,11 @@ class NowPlayingStorage(context: Context) {
         val positionMs = prefs.getLong(KEY_POSITION_MS, 0L)
         val repeatModeKey = prefs.getString(KEY_REPEAT_MODE, NowPlayingRepeatModeKeys.OFF) ?: NowPlayingRepeatModeKeys.OFF
         val isShuffleOn = prefs.getBoolean(KEY_IS_SHUFFLE_ON, false)
+        val queueSongs = try {
+            prefs.getString(KEY_QUEUE_SONGS, null)?.let { JSONArray(it) }.toSongs()
+        } catch (_: Exception) {
+            emptyList()
+        }
 
         return NowPlayingSnapshot(
             queueSongIds = ids,
@@ -55,6 +65,7 @@ class NowPlayingStorage(context: Context) {
             positionMs = positionMs,
             repeatModeKey = repeatModeKey,
             isShuffleOn = isShuffleOn,
+            queueSongs = queueSongs,
         )
     }
 
@@ -66,6 +77,7 @@ class NowPlayingStorage(context: Context) {
         private const val KEY_POSITION_MS = "position_ms"
         private const val KEY_REPEAT_MODE = "repeat_mode"
         private const val KEY_IS_SHUFFLE_ON = "is_shuffle_on"
+        private const val KEY_QUEUE_SONGS = "queue_songs"
         private const val DELIMITER = ","
         private const val INDEX_NONE = -1
     }

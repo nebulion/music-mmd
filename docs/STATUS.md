@@ -28,7 +28,7 @@ Read next: [ARCHITECTURE.md](ARCHITECTURE.md).
 |---|---|---|
 | 0 | Fork, Windows build fixes, CI, new app id | Done |
 | 1 | Music keeps playing in the background | Done, **device check owed** |
-| 2 | The app remembers the last search / album / artist | — |
+| 2 | The app remembers the last search / album / artist | Done, **device check owed** |
 | 3 | Artist search, artist pages with Albums and Singles | — |
 | 4 | Wireframes (owner picks) | — |
 | 5 | Kompakt treatment (MMD kit, paging, type, no motion) | — |
@@ -46,6 +46,21 @@ Read next: [ARCHITECTURE.md](ARCHITECTURE.md).
 
 **Device check owed:** play a YouTube album with the screen off for 30+ minutes, and once with the app
 swiped away. `adb shell dumpsys power | grep -i wake` should show the app's lock while playing.
+
+### Phase 2 — what changed
+- `data/UiStateStore.kt` (tested): last search (query, tab, results), the open album or artist and whether
+  Now Playing was open are written to `files/ui_state.json` when the app leaves the screen and read back on
+  return — after "Don't keep activities" or after the process was killed. Results show without a new search.
+- The saved queue keeps each song's details, so YouTube songs played from search (not in the library) come
+  back after a restart; before, they were dropped.
+- When music kept playing while the app was gone, the app now takes the queue and position from the player
+  instead of the older saved copy.
+- Deviation from the plan: album/artist stayed as they were (not moved into route arguments); restoring them
+  from the store gives the same result with a much smaller change to `MainActivity.kt`.
+- Not done: the instrumented recreation test (needs an emulator; CI runs JVM tests only).
+
+**Device check owed:** search an artist, open an album, press Home, open another app for a while, come back →
+same album page, and Back returns to the same search results.
 
 ## Owner's decisions
 - 2026-10-07: fork MonoMusic only; CalmMusic compared and not used.

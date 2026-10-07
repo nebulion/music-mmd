@@ -286,6 +286,50 @@ class MonoMusicViewModel(
     }
 
     /**
+     * The playback service outlives the activity: music keeps playing while the
+     * Kompakt destroys the activity and this ViewModel. On return the player is the
+     * truth — take its queue and position instead of the saved snapshot.
+     */
+    private suspend fun adoptPlayerQueue(controller: MediaController) {
+        // The snapshot restore runs in init; let it land first so it can't overwrite this.
+        restoreJob?.join()
+        val count = controller.mediaItemCount
+        if (count == 0) return
+        val state = _playbackState.value
+        val ids = (0 until count).map { controller.getMediaItemAt(it).mediaId }
+        if (ids == state.playbackQueue.map { it.id } && state.playbackQueueIndex == controller.currentMediaItemIndex) return
+
+        val known = (state.playbackQueue + _librarySongs.value).associateBy { it.id }
+        val queue = (0 until count).map { i ->
+            val item = controller.getMediaItemAt(i)
+            known[item.mediaId] ?: run {
+                val uri = item.localConfiguration?.uri
+                val isYouTube = uri?.host == "www.youtube.com"
+                SongUiModel(
+                    id = item.mediaId,
+                    title = item.mediaMetadata.title?.toString().orEmpty(),
+                    artist = item.mediaMetadata.artist?.toString().orEmpty(),
+                    sourceType = if (isYouTube) "YOUTUBE" else "LOCAL_FILE",
+                    audioUri = if (isYouTube) item.mediaId else uri?.toString(),
+                    album = item.mediaMetadata.albumTitle?.toString(),
+                )
+            }
+        }
+        val index = controller.currentMediaItemIndex.coerceIn(0, queue.lastIndex)
+        val current = queue[index]
+        _playbackState.value = state.copy(
+            playbackQueue = queue,
+            playbackQueueIndex = index,
+            currentSongId = current.id,
+            nowPlayingSong = current,
+            isPlaybackPlaying = controller.playWhenReady,
+            nowPlayingPositionMs = controller.currentPosition,
+            nowPlayingDurationMs = current.durationMillis ?: controller.duration.coerceAtLeast(0L),
+        )
+        persistPlaybackSnapshot()
+    }
+
+    /**
      * Mirrors the player into [PlaybackState] once a second: position, buffering,
      * and the queue index (the player advances on its own). The playback
      * service keeps the YouTube precache window, so it works in the background.
@@ -293,6 +337,7 @@ class MonoMusicViewModel(
     fun startLocalPlaybackMonitoring(controller: MediaController) {
         playbackMonitorJob?.cancel()
         playbackMonitorJob = viewModelScope.launch {
+            adoptPlayerQueue(controller)
             var lastPersistElapsedMs = 0L
 
             while (true) {
@@ -399,6 +444,7 @@ class MonoMusicViewModel(
             positionMs = state.nowPlayingPositionMs,
             repeatModeKey = repeatModeKey,
             isShuffleOn = state.isShuffleOn,
+            queueSongs = state.playbackQueue,
         )
         viewModelScope.launch(Dispatchers.IO) { nowPlayingStorage.save(snapshot) }
     }
@@ -903,8 +949,10 @@ class MonoMusicViewModel(
         playbackMonitorJob?.cancel()
     }
 
+    private var restoreJob: kotlinx.coroutines.Job? = null
+
     init {
-        viewModelScope.launch {
+        restoreJob = viewModelScope.launch {
             try {
                 libraryRepository.sync(
                     includeLocal = app.settingsManager.includeLocalMusic.value,
@@ -923,7 +971,10 @@ class MonoMusicViewModel(
                         .flatMap { songDao.getByIds(it) }
                         .associateBy { it.id }
                 }
-                val queue = snapshot.queueSongIds.mapNotNull { songsById[it]?.toUiModel() }
+                // Library rows win (fresh tags, local file); songs played from search
+                // that aren't in the library come from the snapshot itself.
+                val savedById = snapshot.queueSongs.associateBy { it.id }
+                val queue = snapshot.queueSongIds.mapNotNull { songsById[it]?.toUiModel() ?: savedById[it] }
                 if (queue.isNotEmpty()) {
                     val index = snapshot.currentIndex?.takeIf { it in queue.indices } ?: 0
                     val current = queue[index]

@@ -278,7 +278,10 @@ fun MonoMusic(app: MonoMusic) {
     var songsError by remember { mutableStateOf<String?>(null) }
     var albumsError by remember { mutableStateOf<String?>(null) }
 
-    var selectedAlbum by remember { mutableStateOf<AlbumUiModel?>(null) }
+    // Where the owner was before the app went to the background (see UiStateStore).
+    val savedUi = remember { app.uiStateStore.load() }
+
+    var selectedAlbum by remember { mutableStateOf(savedUi.selectedAlbum) }
     var showRenameAlbumDialog by remember { mutableStateOf(false) }
     var renameAlbumText by remember { mutableStateOf("") }
     var renameAlbumArtistText by remember { mutableStateOf("") }
@@ -300,24 +303,24 @@ fun MonoMusic(app: MonoMusic) {
     var playlistDetailsSelectionCount by remember { mutableStateOf(0) }
     var showDeletePlaylistSongsConfirmation by remember { mutableStateOf(false) }
 
-    var selectedArtist by remember { mutableStateOf<String?>(null) }
-    var selectedArtistId by remember { mutableStateOf<String?>(null) }
+    var selectedArtist by remember { mutableStateOf(savedUi.selectedArtist) }
+    var selectedArtistId by remember { mutableStateOf(savedUi.selectedArtistId) }
 
     val playbackQueue = playbackState.playbackQueue
     val currentSongId = playbackState.currentSongId
     val nowPlayingSong = playbackState.nowPlayingSong
     var isPlaybackPlaying = playbackState.isPlaybackPlaying
 
-    var showNowPlaying by remember { mutableStateOf(false) }
+    var showNowPlaying by remember { mutableStateOf(savedUi.showNowPlaying) }
     var showAddToPlaylistDialog by remember { mutableStateOf(false) }
     var songToAddToPlaylist by remember { mutableStateOf<SongUiModel?>(null) }
     var pendingAddToNewPlaylistSong by remember { mutableStateOf<SongUiModel?>(null) }
 
-    var searchQuery by remember { mutableStateOf("") }
-    var searchSongs by remember { mutableStateOf<List<SongUiModel>>(emptyList()) }
-    var searchAlbums by remember { mutableStateOf<List<AlbumUiModel>>(emptyList()) }
-    var searchLocalSongs by remember { mutableStateOf<List<SongUiModel>>(emptyList()) }
-    var searchSelectedTab by remember { mutableStateOf(0) }
+    var searchQuery by remember { mutableStateOf(savedUi.searchQuery) }
+    var searchSongs by remember { mutableStateOf(savedUi.searchSongs) }
+    var searchAlbums by remember { mutableStateOf(savedUi.searchAlbums) }
+    var searchLocalSongs by remember { mutableStateOf(savedUi.searchLocalSongs) }
+    var searchSelectedTab by remember { mutableStateOf(savedUi.searchTab) }
     var isSearching by remember { mutableStateOf(false) }
     var searchError by remember { mutableStateOf<String?>(null) }
 
@@ -338,6 +341,29 @@ fun MonoMusic(app: MonoMusic) {
     }
 
     var settingsSelectedTab by remember { mutableStateOf(0) }
+
+    // Save where the owner is whenever the app leaves the screen.
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) {
+                val state = com.calmapps.calmmusic.data.UiState(
+                    searchQuery = searchQuery,
+                    searchTab = searchSelectedTab,
+                    searchSongs = searchSongs,
+                    searchAlbums = searchAlbums,
+                    searchLocalSongs = searchLocalSongs,
+                    selectedAlbum = selectedAlbum,
+                    selectedArtist = selectedArtist,
+                    selectedArtistId = selectedArtistId,
+                    showNowPlaying = showNowPlaying,
+                )
+                // Not a composition scope: that is cancelled when the activity is destroyed.
+                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch { app.uiStateStore.save(state) }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     fun performSearch() {
         if (searchQuery.isBlank()) return

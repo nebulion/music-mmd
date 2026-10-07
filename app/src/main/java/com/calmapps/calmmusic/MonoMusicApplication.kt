@@ -67,6 +67,10 @@ class MonoMusic : Application() {
     /** Which resolver produced the current stream URL; shown on Now Playing. */
     val streamResolverLabel = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
 
+    val uiStateStore: com.calmapps.calmmusic.data.UiStateStore by lazy {
+        com.calmapps.calmmusic.data.UiStateStore(this)
+    }
+
     val nowPlayingStorage: NowPlayingStorage by lazy {
         NowPlayingStorage(this)
     }
