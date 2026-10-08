@@ -86,6 +86,25 @@ class CoverStore(private val app: MonoMusic) {
         embedded ?: if (!song.id.startsWith("local:")) fromVideo(song.id) else null
     }
 
+    /**
+     * The cover of a queued song as PNG bytes, for the media session (launchers such as InkOS show
+     * only a picture attached to the session, never one behind a link).
+     */
+    suspend fun artworkFor(item: androidx.media3.common.MediaItem): ByteArray? {
+        val uri = item.localConfiguration?.uri
+        val isYouTube = uri?.host == "www.youtube.com"
+        val song = com.calmapps.calmmusic.ui.SongUiModel(
+            id = item.mediaId,
+            title = item.mediaMetadata.title?.toString().orEmpty(),
+            artist = item.mediaMetadata.artist?.toString().orEmpty(),
+            sourceType = if (isYouTube) "YOUTUBE" else "LOCAL_FILE",
+            audioUri = if (isYouTube) item.mediaId else uri?.toString(),
+            album = item.mediaMetadata.albumTitle?.toString(),
+        )
+        loadForSong(song) ?: return null
+        return withContext(Dispatchers.IO) { File(dir, songKey(song) + ".png").takeIf { it.exists() }?.readBytes() }
+    }
+
     private suspend fun loadKeyed(k: String, source: suspend () -> Bitmap?): ImageBitmap? = withContext(Dispatchers.IO) {
         memory.get(k)?.let { return@withContext it }
         if (k in none) return@withContext null

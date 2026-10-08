@@ -2,7 +2,7 @@ package com.calmapps.calmmusic
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.material.icons.outlined.DownloadDone
-import androidx.compose.material.icons.automirrored.outlined.Sort
+import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
@@ -297,7 +297,7 @@ private fun MonoMusicTopAppBarActions(
 
         if (onSortClick != null) {
             IconButton(onClick = onSortClick) {
-                Icon(imageVector = Icons.AutoMirrored.Outlined.Sort, contentDescription = "Sort")
+                Icon(imageVector = Icons.Outlined.FilterList, contentDescription = "Sort")
             }
         }
         IconButton(onClick = onNavigateToSearchClick) {
@@ -442,7 +442,7 @@ private fun MonoMusicTopAppBarActions(
 
     if (currentRoute == Screen.ArtistDetails.route && onSortClick != null) {
         IconButton(onClick = onSortClick) {
-            Icon(imageVector = Icons.AutoMirrored.Outlined.Sort, contentDescription = "Sort albums")
+            Icon(imageVector = Icons.Outlined.FilterList, contentDescription = "Sort albums")
         }
     }
     if (currentRoute == Screen.ArtistDetails.route && onArtistShuffleClick != null) {

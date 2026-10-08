@@ -252,7 +252,7 @@ fun NowPlayingScreen(
                 )
             }
 
-            // No spinner (E Ink): the button stays put; "Loading" shows under the controls instead.
+            // No spinner and no "Loading" text (E Ink; owner, 2026-10-08): the button stays put.
             IconButton(
                 onClick = onPlayPauseClick,
                 modifier = Modifier.size(72.dp)
@@ -276,7 +276,7 @@ fun NowPlayingScreen(
             }
         }
 
-        DelayedLoadingLine(visible = isLoading)
+        Spacer(modifier = Modifier.height(16.dp))
 
         // Bottom row for secondary actions (e.g. shuffle, repeat, add to playlist / library)
         Row(
@@ -456,28 +456,4 @@ private fun NowPlayingScreenPreview() {
         sourceType = "YOUTUBE",
         streamResolverLabel = "Innertube/Piped",
     )
-}
-
-/**
- * "Loading" under the controls while a song buffers: nothing for the first half second (most
- * starts are quicker), then static text. The line's height is always reserved, so nothing moves.
- */
-@Composable
-private fun DelayedLoadingLine(visible: Boolean) {
-    var show by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
-    androidx.compose.runtime.LaunchedEffect(visible) {
-        show = false
-        if (visible) {
-            kotlinx.coroutines.delay(500)
-            show = true
-        }
-    }
-    Box(Modifier.fillMaxWidth().height(32.dp), contentAlignment = Alignment.Center) {
-        if (show) {
-            com.mudita.mmd.components.text.TextMMD(
-                text = "Loading",
-                style = MaterialTheme.typography.bodyMedium,
-            )
-        }
-    }
 }

@@ -420,17 +420,12 @@ fun MonoMusic(app: MonoMusic) {
 
     // ---- Opening pages in one paint -------------------------------------------------------
     // A page is opened only once its content is loaded (PageCache), so its top bar and rows are
-    // drawn together. If loading takes over half a second, a "Loading" line shows meanwhile.
+    // drawn together. Nothing is shown while it loads (owner, 2026-10-08: no "Loading" messages).
     var openingJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
-    var showOpening by remember { mutableStateOf(false) }
 
     fun openWhenReady(load: suspend () -> Unit, open: () -> Unit) {
         if (openingJob?.isActive == true) return
         openingJob = libraryScope.launch {
-            val hint = launch {
-                kotlinx.coroutines.delay(500)
-                showOpening = true
-            }
             try {
                 load()
             } catch (e: kotlinx.coroutines.CancellationException) {
@@ -438,8 +433,6 @@ fun MonoMusic(app: MonoMusic) {
             } catch (_: Exception) {
                 // the page shows the error itself
             }
-            hint.cancel()
-            showOpening = false
             open()
         }
     }
@@ -1223,22 +1216,7 @@ fun MonoMusic(app: MonoMusic) {
             ) { paddingValues ->
                 Box(Modifier.fillMaxSize().padding(paddingValues)) {
                     page()
-            if (showOpening) {
-                Column(
-                    Modifier
-                        .align(Alignment.BottomCenter)
-                                                .fillMaxWidth()
-                        .background(androidx.compose.ui.graphics.Color.White)
-                        .zIndex(1f),
-                ) {
-                    HorizontalDividerMMD(thickness = 3.dp)
-                    TextMMD(
-                        text = "Loading",
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.padding(16.dp),
-                    )
-                }
-            }
+
                 }
             }
         }

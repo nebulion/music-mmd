@@ -179,6 +179,15 @@ two fixes; not re-measured after them because the owner was using the phone.
 - **Settings → Download quality** (Small ≈70 / Normal ≈128 / Best ≈160 kbps) and **Download on Wi-Fi only**
   (downloads wait, shown as "waiting for Wi-Fi" on the Downloads page).
 
+### 2026-10-08 — no "Loading", launcher art
+- Every "Loading" message is gone: the line shown while a page opened, the list pages' waiting text and
+  Now Playing's buffering line. Pages open silently once loaded.
+- Sort icon: centred lines (FilterList) instead of the left-aligned Sort glyph.
+- **InkOS showed no album art.** Cause: InkOS (`HomeUI.kt`) reads only a bitmap from the media session
+  (ALBUM_ART / ART / DISPLAY_ICON); MonoMusic gave a YouTube link for streamed songs and nothing for files.
+  Fix: on each song change the playback service loads the cover (CoverStore) and puts it in the item's
+  metadata as PNG bytes (`replaceMediaItem`, playback continues). **Device check owed** with InkOS.
+
 ## Owner's decisions
 - 2026-10-07: fork MonoMusic only; CalmMusic compared and not used.
 - 2026-10-07: full Kompakt treatment, like Macros and Fit.

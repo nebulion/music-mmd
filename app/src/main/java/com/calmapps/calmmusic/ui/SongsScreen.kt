@@ -60,7 +60,7 @@ fun SongsScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center,
                 ) {
-                    com.calmapps.calmmusic.ui.kit.DelayedText("Loading")
+                    // nothing while loading (owner, 2026-10-08: no "Loading" messages anywhere)
                 }
             }
 

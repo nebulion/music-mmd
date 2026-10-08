@@ -27,6 +27,7 @@ import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import okhttp3.ConnectionPool
 import okhttp3.OkHttpClient
@@ -102,8 +103,12 @@ class PlaybackService : MediaSessionService() {
             }
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                // adding the cover (replaceMediaItem) reports the same song again: not a new play
+                val sameSong = reason == Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED &&
+                    mediaItem?.mediaId == countedId
                 retries = 0
-                countedId = null
+                if (!sameSong) countedId = null
+                attachArtwork(player)
                 updatePrecacheWindow(player)
                 schedulePlayCount(player)
             }
@@ -164,6 +169,35 @@ class PlaybackService : MediaSessionService() {
                 player.playWhenReady = false
                 player.prepare()
             }
+        }
+    }
+
+    private val artworkScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.Main)
+
+    /**
+     * Puts the playing song's cover into the session as a picture (owner, 2026-10-08: InkOS's music
+     * widget showed no art). Launchers read only a bitmap from the session; MonoMusic used to give a
+     * link for streamed songs and nothing for files on the phone. Swapping the item's metadata with
+     * replaceMediaItem keeps playing (same URI, nothing is prepared again).
+     */
+    private fun attachArtwork(player: ExoPlayer) {
+        val item = player.currentMediaItem ?: return
+        if (item.mediaMetadata.artworkData != null) return
+        artworkScope.launch {
+            val bytes = try {
+                (application as MonoMusic).covers.artworkFor(item)
+            } catch (_: Exception) {
+                null
+            } ?: return@launch
+            val index = player.currentMediaItemIndex
+            if (player.currentMediaItem?.mediaId != item.mediaId || index == C.INDEX_UNSET) return@launch
+            val withArt = item.buildUpon().setMediaMetadata(
+                item.mediaMetadata.buildUpon()
+                    .setArtworkData(bytes, androidx.media3.common.MediaMetadata.PICTURE_TYPE_FRONT_COVER)
+                    .setArtworkUri(null)
+                    .build(),
+            ).build()
+            player.replaceMediaItem(index, withArt)
         }
     }
 
@@ -296,6 +330,7 @@ class PlaybackService : MediaSessionService() {
 
     override fun onDestroy() {
         handler.removeCallbacksAndMessages(null)
+        artworkScope.coroutineContext[kotlinx.coroutines.Job]?.cancel()
         mediaSession?.run {
             player.release()
             release()
