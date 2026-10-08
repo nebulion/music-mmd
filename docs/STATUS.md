@@ -12,7 +12,7 @@ Read next: [ARCHITECTURE.md](ARCHITECTURE.md).
 |---|---|
 | Fork | github.com/nebulion/music-mmd, branch `mmd` (CI: build, unit tests, release APK artifact) |
 | Upstream | `upstream` remote = berendsliedrecht/MonoMusic |
-| Package | `com.musicmmd` (installs beside MonoMusic), app name "Music". Code package is still `com.calmapps.calmmusic` |
+| Package | `com.musicmmd`, app name **MonoMusic** (the original MonoMusic was uninstalled 2026-10-08 at the owner's request). Code package is still `com.calmapps.calmmusic` |
 | Build | AGP 9.4, Kotlin 2.4.10, Compose BOM 2026.08, MMD 1.0.2, Gradle 9.7.1, compileSdk 37, minSdk 29. R8 release, debug-signed |
 | Local compile | `bash tools/gradle-low.sh :app:testDebugUnitTest :app:assembleDebug` (gentle: 4 GB, 2 workers, low priority) |
 
@@ -113,6 +113,34 @@ Settings → E Ink.
   opening the app on the phone. No first-draw hold yet. **If streaming fails only in the release build,
   suspect R8 first** (try the debug APK).
 
+### 2026-10-08 — one paint per screen change
+Measured on the phone with `dumpsys gfxinfo`: a bottom-tab switch drew 3–4 frames; opening an album or
+artist drew the bar first, then "Loading…", then rows.
+- **Bars inside every page.** NavHost shows a new destination a frame or more after the back stack changes;
+  the top bar, playing strip and tabs sat outside it and switched first. Each destination now draws its own
+  Scaffold (`chrome(route) { … }` in `MainActivity.kt`), so bar, page and tabs swap together.
+- **Pages open when their content is ready** (`PageCache.kt`, `openAlbum` / `openArtist` / playlist tap):
+  album, artist and playlist content is loaded first, then the page opens complete. Over 0.5 s, a static
+  "Loading" line shows on the current page meanwhile. Coming back draws from the cache, then refreshes
+  quietly (repaints only if something changed). The open page's content is saved with the UI state, so it
+  also draws at once after the process was killed.
+- **First frame held** until the library is read and the player connected (ceiling 1.5 s); no white window.
+- **Scrollbar column always present**; thumb and arrows decided while drawing (before: rows narrowed a frame
+  after a page appeared).
+- "Loading…" / "Searching…" texts only appear after 0.5 s (`DelayedText`).
+- **Bug fixed:** "Error loading artist: the coroutine scope left the composition" — a cancelled load (page
+  left, or reloaded on return) was shown as an error. Cancellation is no longer treated as a failure.
+- **Now Playing on return:** the ViewModel connects to the player before the first frame and takes its song,
+  position and play state; updates now follow player events immediately (was a 1–2 s poll). Checked on the
+  phone: correct song, playing, right position the moment the app reopened.
+- Now Playing has the standard MMD top bar and 3 dp rule (it had only a small back row).
+- **More tab removed:** Downloads, Radio and Settings are in the ⋮ menu of the tab pages; 4 bottom tabs.
+- **Finish downloading:** albums downloaded from YouTube show the download icon; it fetches the album's
+  track list and downloads what's missing ("Album is complete" if nothing is).
+
+Measured after: cold start 0.79 s (first frame complete), tab switch 2–3 frames (from 3–4) before the last
+two fixes; not re-measured after them because the owner was using the phone.
+
 ## Owner's decisions
 - 2026-10-07: fork MonoMusic only; CalmMusic compared and not used.
 - 2026-10-07: full Kompakt treatment, like Macros and Fit.
@@ -124,3 +152,4 @@ Settings → E Ink.
     the Local tab goes away.
   - **3A** — artist page tabs Albums · Singles · Songs (as built); shuffle moves to the top bar.
   - **4C** — Now Playing keeps the slider and position updating every second (owner's choice, like Fit's rest timer).
+- 2026-10-08: app name MonoMusic; old MonoMusic uninstalled (its data didn't matter). More tab → top-bar ⋮.

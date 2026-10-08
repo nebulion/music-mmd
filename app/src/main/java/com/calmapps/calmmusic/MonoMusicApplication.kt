@@ -67,6 +67,9 @@ class MonoMusic : Application() {
     /** Which resolver produced the current stream URL; shown on Now Playing. */
     val streamResolverLabel = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
 
+    /** Album, artist and playlist page content; see [PageCache]. */
+    val pageCache = PageCache()
+
     val uiStateStore: com.calmapps.calmmusic.data.UiStateStore by lazy {
         com.calmapps.calmmusic.data.UiStateStore(this)
     }

@@ -74,6 +74,11 @@ class PlaylistsViewModel(
         val songCount: Int,
     )
 
+    fun cachedPlaylistSongs(playlistId: String): List<SongUiModel>? = app.pageCache.playlist(playlistId)
+
+    suspend fun loadPlaylistSongs(playlistId: String): List<SongUiModel> =
+        getPlaylistSongs(playlistId).also { app.pageCache.putPlaylist(playlistId, it) }
+
     suspend fun getPlaylistSongs(playlistId: String): List<SongUiModel> {
         return withContext(Dispatchers.IO) {
             playlistDao.getSongsForPlaylist(playlistId).map { it.toUiModel() }

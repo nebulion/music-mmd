@@ -49,6 +49,7 @@ enum class RepeatMode {
 }
 
 @Composable
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 fun NowPlayingScreen(
     title: String,
     artist: String,
@@ -88,33 +89,34 @@ fun NowPlayingScreen(
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
-            ) {}
+            ) {},
+    ) {
+        // The same MMD top bar and 3 dp rule as every other page (it had only a small back row)
+        com.mudita.mmd.components.top_app_bar.TopAppBarMMD(
+            navigationIcon = {
+                IconButton(onClick = onBackClick) {
+                    Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                }
+            },
+            title = {
+                com.mudita.mmd.components.text.TextMMD(
+                    text = "Now Playing",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                )
+            },
+            showDivider = false,
+        )
+        com.mudita.mmd.components.divider.HorizontalDividerMMD(thickness = 3.dp)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .weight(1f)
             .padding(16.dp),
         verticalArrangement = Arrangement.SpaceBetween,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // In-content top bar with back affordance (no Scaffold top app bar here)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onBackClick),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = "Back",
-            )
 
-            Spacer(modifier = Modifier.width(12.dp))
-
-            Text(
-                text = "Now Playing",
-                style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Bold,
-            )
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
 
         Column(
             modifier = Modifier
@@ -393,6 +395,7 @@ fun NowPlayingScreen(
                 }
             }
         }
+    }
     }
 }
 

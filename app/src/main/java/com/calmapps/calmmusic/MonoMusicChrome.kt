@@ -1,5 +1,8 @@
 package com.calmapps.calmmusic
 
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import com.mudita.mmd.components.divider.HorizontalDividerMMD
 import androidx.compose.ui.Alignment
 import androidx.compose.material3.MaterialTheme
@@ -54,7 +57,7 @@ import androidx.compose.ui.graphics.vector.rememberVectorPainter
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MonoMusicTopAppBar(
-    currentDestination: NavDestination?,
+    currentRoute: String?,
     canNavigateBack: Boolean,
     focusRequester: FocusRequester,
     searchQuery: String,
@@ -71,6 +74,7 @@ fun MonoMusicTopAppBar(
     canDownloadSelectedAlbum: Boolean,
     canRenameSelectedAlbum: Boolean,
     onArtistShuffleClick: (() -> Unit)?,
+    onOpenPage: (String) -> Unit,
     onBackClick: () -> Unit,
     onCancelPlaylistsEditClick: () -> Unit,
     onCancelPlaylistDetailsEditClick: () -> Unit,
@@ -94,7 +98,7 @@ fun MonoMusicTopAppBar(
     TopAppBarMMD(
         navigationIcon = {
             when {
-                currentDestination?.route == Screen.PlaylistDetails.route && isPlaylistDetailsEditMode -> {
+                currentRoute == Screen.PlaylistDetails.route && isPlaylistDetailsEditMode -> {
                     IconButton(onClick = onCancelPlaylistDetailsEditClick) {
                         Icon(
                             imageVector = Icons.Outlined.Clear,
@@ -103,7 +107,7 @@ fun MonoMusicTopAppBar(
                     }
                 }
 
-                currentDestination?.route == Screen.Playlists.route && isPlaylistsEditMode -> {
+                currentRoute == Screen.Playlists.route && isPlaylistsEditMode -> {
                     IconButton(onClick = onCancelPlaylistsEditClick) {
                         Icon(
                             imageVector = Icons.Outlined.Clear,
@@ -112,7 +116,7 @@ fun MonoMusicTopAppBar(
                     }
                 }
 
-                canNavigateBack && currentDestination?.route !in navRoutes -> {
+                canNavigateBack && currentRoute !in navRoutes -> {
                     IconButton(onClick = onBackClick) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -124,7 +128,7 @@ fun MonoMusicTopAppBar(
         },
         title = {
             when {
-                currentDestination?.route == Screen.Search.route -> {
+                currentRoute == Screen.Search.route -> {
                     SearchBarDefaultsMMD.InputField(
                         query = searchQuery,
                         onQueryChange = onSearchQueryChange,
@@ -153,7 +157,7 @@ fun MonoMusicTopAppBar(
                     )
                 }
 
-                currentDestination?.route == Screen.AlbumDetails.route && selectedAlbum != null -> {
+                currentRoute == Screen.AlbumDetails.route && selectedAlbum != null -> {
                     androidx.compose.foundation.layout.Column {
                         Text(
                             text = selectedAlbum.title,
@@ -175,7 +179,7 @@ fun MonoMusicTopAppBar(
                     }
                 }
 
-                currentDestination?.route == Screen.ArtistDetails.route && selectedArtistName != null -> {
+                currentRoute == Screen.ArtistDetails.route && selectedArtistName != null -> {
                     Text(
                         text = selectedArtistName,
                         style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
@@ -185,7 +189,7 @@ fun MonoMusicTopAppBar(
                     )
                 }
 
-                currentDestination?.route == Screen.PlaylistDetails.route && selectedPlaylist != null -> {
+                currentRoute == Screen.PlaylistDetails.route && selectedPlaylist != null -> {
                     Text(
                         text = selectedPlaylist.name,
                         style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
@@ -197,7 +201,7 @@ fun MonoMusicTopAppBar(
 
                 else -> {
                     Text(
-                        text = getAppBarTitle(currentDestination),
+                        text = getAppBarTitle(currentRoute),
                         style = androidx.compose.material3.MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
@@ -207,7 +211,7 @@ fun MonoMusicTopAppBar(
         },
         actions = {
             MonoMusicTopAppBarActions(
-                currentDestination = currentDestination,
+                currentRoute = currentRoute,
                 isPlaylistsEditMode = isPlaylistsEditMode,
                 playlistEditSelectionCount = playlistEditSelectionCount,
                 playlistDetailsSelectionCount = playlistDetailsSelectionCount,
@@ -217,6 +221,7 @@ fun MonoMusicTopAppBar(
                 canRenameSelectedAlbum = canRenameSelectedAlbum,
                 hasLibraryPlaylists = selectedPlaylist != null,
                 onArtistShuffleClick = onArtistShuffleClick,
+                onOpenPage = onOpenPage,
                 onEnterPlaylistsEditClick = onEnterPlaylistsEditClick,
                 onNavigateToSearchClick = onNavigateToSearchClick,
                 onPlaylistDetailsMenuToggle = onPlaylistDetailsMenuToggle,
@@ -238,7 +243,7 @@ fun MonoMusicTopAppBar(
 
 @Composable
 private fun MonoMusicTopAppBarActions(
-    currentDestination: NavDestination?,
+    currentRoute: String?,
     isPlaylistsEditMode: Boolean,
     playlistEditSelectionCount: Int,
     playlistDetailsSelectionCount: Int,
@@ -248,6 +253,7 @@ private fun MonoMusicTopAppBarActions(
     canRenameSelectedAlbum: Boolean,
     hasLibraryPlaylists: Boolean,
     onArtistShuffleClick: (() -> Unit)?,
+    onOpenPage: (String) -> Unit,
     onEnterPlaylistsEditClick: () -> Unit,
     onNavigateToSearchClick: () -> Unit,
     onPlaylistDetailsMenuToggle: () -> Unit,
@@ -263,8 +269,8 @@ private fun MonoMusicTopAppBarActions(
 ) {
     val navRoutes = remember { navItems.map { it.route } }
 
-    if (currentDestination?.route != Screen.Search.route && currentDestination?.route in navRoutes) {
-        if (currentDestination?.route == Screen.Playlists.route && hasLibraryPlaylists && !isPlaylistsEditMode) {
+    if (currentRoute != Screen.Search.route && currentRoute in navRoutes) {
+        if (currentRoute == Screen.Playlists.route && hasLibraryPlaylists && !isPlaylistsEditMode) {
             IconButton(onClick = onEnterPlaylistsEditClick) {
                 Icon(
                     imageVector = Icons.Outlined.Edit,
@@ -279,9 +285,35 @@ private fun MonoMusicTopAppBarActions(
                 contentDescription = "Search",
             )
         }
+
+        // ⋮ in place of the old More tab: Downloads, Radio, Settings
+        androidx.compose.foundation.layout.Box {
+            var menuOpen by remember { mutableStateOf(false) }
+            IconButton(onClick = { menuOpen = true }) {
+                Icon(
+                    imageVector = Icons.Outlined.MoreVert,
+                    contentDescription = "More",
+                )
+            }
+            DropdownMenuMMD(
+                expanded = menuOpen,
+                onDismissRequest = { menuOpen = false },
+            ) {
+                listOf(Screen.Downloads, Screen.Radio, Screen.Settings).forEachIndexed { i, page ->
+                    if (i > 0) DashedDivider(thickness = 1.dp)
+                    DropdownMenuItemMMD(
+                        text = { TextMMD(page.label) },
+                        onClick = {
+                            menuOpen = false
+                            onOpenPage(page.route)
+                        },
+                    )
+                }
+            }
+        }
     }
 
-    if (currentDestination?.route == Screen.PlaylistDetails.route && !isPlaylistDetailsEditMode) {
+    if (currentRoute == Screen.PlaylistDetails.route && !isPlaylistDetailsEditMode) {
         androidx.compose.foundation.layout.Box {
             IconButton(onClick = onPlaylistDetailsMenuToggle) {
                 Icon(
@@ -323,7 +355,7 @@ private fun MonoMusicTopAppBarActions(
         }
     }
 
-    if (currentDestination?.route == Screen.AlbumDetails.route) {
+    if (currentRoute == Screen.AlbumDetails.route) {
         if (canDownloadSelectedAlbum) {
             IconButton(onClick = onAlbumDownloadClick) {
                 Icon(
@@ -331,7 +363,8 @@ private fun MonoMusicTopAppBarActions(
                     contentDescription = "Download album",
                 )
             }
-        } else if (canRenameSelectedAlbum) {
+        }
+        if (canRenameSelectedAlbum) {
             IconButton(onClick = onAlbumRenameClick) {
                 Icon(
                     imageVector = Icons.Outlined.Edit,
@@ -342,7 +375,7 @@ private fun MonoMusicTopAppBarActions(
     }
 
     if (
-        currentDestination?.route == Screen.Playlists.route &&
+        currentRoute == Screen.Playlists.route &&
         isPlaylistsEditMode &&
         playlistEditSelectionCount > 0
     ) {
@@ -360,7 +393,7 @@ private fun MonoMusicTopAppBarActions(
         }
     }
 
-    if (currentDestination?.route == Screen.PlaylistAddSongs.route) {
+    if (currentRoute == Screen.PlaylistAddSongs.route) {
         OutlinedButtonMMD(
             contentPadding = PaddingValues(8.dp),
             modifier = Modifier.padding(horizontal = 8.dp),
@@ -375,7 +408,7 @@ private fun MonoMusicTopAppBarActions(
         }
     }
 
-    if (currentDestination?.route == Screen.ArtistDetails.route && onArtistShuffleClick != null) {
+    if (currentRoute == Screen.ArtistDetails.route && onArtistShuffleClick != null) {
         IconButton(onClick = onArtistShuffleClick) {
             Icon(
                 imageVector = Icons.Outlined.Shuffle,
@@ -437,7 +470,7 @@ fun PlayingStrip(
 
 @Composable
 fun MonoMusicBottomBar(
-    currentDestination: NavDestination?,
+    currentRoute: String?,
     onNavigate: (String) -> Unit,
     playingTitle: String?,
     playingArtist: String,
@@ -446,7 +479,7 @@ fun MonoMusicBottomBar(
     onPlayPause: () -> Unit,
 ) {
     val navRoutes = remember { navItems.map { it.route } }
-    val route = currentDestination?.route
+    val route = currentRoute
 
     Column {
     if (playingTitle != null && route != Screen.Radio.route && route != Screen.PlaylistAddSongs.route) {
@@ -459,13 +492,13 @@ fun MonoMusicBottomBar(
         )
     }
 
-    if (currentDestination?.route in navRoutes) {
+    if (currentRoute in navRoutes) {
         NavigationBarMMD(
             modifier = Modifier.padding(bottom = 2.dp),
         ) {
             navItems.forEach { screen ->
                 val isSelected =
-                    currentDestination?.hierarchy?.any { it.route == screen.route } == true
+                    currentRoute == screen.route
                 NavigationBarItemMMD(
                     icon = {
                         Icon(

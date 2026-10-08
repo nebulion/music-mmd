@@ -42,8 +42,10 @@ fun AlbumDetailsScreen(
     onDeleteClick: (SongUiModel) -> Unit,
     librarySongIds: Set<String> = emptySet(),
 ) {
-    var songs by remember { mutableStateOf<List<SongUiModel>>(emptyList()) }
-    var isLoading by remember { mutableStateOf(true) }
+    // Opened only once its songs are cached (see PageCache): drawn complete, in one paint.
+    val cached = remember(album?.id) { album?.let { viewModel.cachedAlbumSongs(it) } }
+    var songs by remember(album?.id) { mutableStateOf(cached ?: emptyList()) }
+    var isLoading by remember(album?.id) { mutableStateOf(album != null && cached == null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
     val playbackState by viewModel.playbackState.collectAsState()
@@ -56,12 +58,15 @@ fun AlbumDetailsScreen(
             isLoading = false
             return@LaunchedEffect
         }
-        isLoading = true
-        errorMessage = null
         try {
-            songs = viewModel.getAlbumSongsForDetails(album)
+            // a quiet refresh: the page only changes if the songs did
+            val fresh = viewModel.loadAlbumSongs(album)
+            if (fresh != songs) songs = fresh
+            errorMessage = null
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e // the page was left or reloaded: not an error
         } catch (e: Exception) {
-            errorMessage = e.message ?: "Failed to load album songs"
+            if (songs.isEmpty()) errorMessage = e.message ?: "Couldn't load this album"
         } finally {
             isLoading = false
         }
@@ -82,7 +87,7 @@ fun AlbumDetailsScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center,
                 ) {
-                    TextMMD(text = "Loading album...")
+                    com.calmapps.calmmusic.ui.kit.DelayedText("Loading")
                 }
             }
 

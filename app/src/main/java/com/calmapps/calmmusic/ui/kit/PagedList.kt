@@ -74,7 +74,6 @@ fun PagedList(
     content: LazyListScope.() -> Unit,
 ) {
     val scope = rememberCoroutineScope()
-    val canScroll by remember(state) { derivedStateOf { state.canScrollForward || state.canScrollBackward } }
     Row(modifier) {
         // Foundation's list, not LazyColumnMMD (owner, 2026-10-06: "top bar and content at the same
         // time"): LazyColumnMMD draws itself at alpha 0 until its first layout, so every screen
@@ -87,7 +86,10 @@ fun PagedList(
             userScrollEnabled = false,
             content = content,
         )
-        if (isScrollbarVisible && (canScroll || canGrow)) {
+        // Always the same column (owner, 2026-10-08: pages painted twice): a bar that appears once
+        // the list has measured itself narrows every row a frame later. The thumb and arrows are
+        // worked out while drawing, from this frame's layout, so the first frame is already right.
+        if (isScrollbarVisible) {
             PageScrollbar(
                 state = state,
                 onPage = { forward -> scope.launch { if (forward) state.pageForward() else state.pageBack() } },
@@ -188,8 +190,9 @@ private fun PageScrollbar(
     onEnd: (forward: Boolean) -> Unit,
     onJump: (index: Int) -> Unit,
 ) {
-    val atStart by remember(state) { derivedStateOf { !state.canScrollBackward } }
-    val atEnd by remember(state) { derivedStateOf { !state.canScrollForward } }
+    // read while drawing, not composing: no recomposition, no second frame
+    val atStart = { !state.canScrollBackward }
+    val atEnd = { !state.canScrollForward }
     // MMD's own slider colours are internal; they are the theme's surface and its ink
     val heights = remember(state) { Heights() }
     val ink = MaterialTheme.colorScheme.onSurface
@@ -201,7 +204,7 @@ private fun PageScrollbar(
     ) {
         ScrollArrow(
             up = true,
-            active = !atStart,
+            active = { !atStart() },
             onClick = { onPage(false) },
             onLongClick = { onEnd(false) },
         )
@@ -221,7 +224,7 @@ private fun PageScrollbar(
         ) {
             val radius = CornerRadius(size.width / 2, size.width / 2)
             drawRoundRect(color = paper, size = size, cornerRadius = radius)
-            val thumb = thumbOf(state, heights, atStart, atEnd) ?: return@Canvas
+            val thumb = thumbOf(state, heights, atStart(), atEnd()) ?: return@Canvas
             // the keyboard can squeeze the track below the thumb's minimum (search): fill it then
             val minHeight = minOf(maxOf(size.height * 0.05f, LazyDefaultsMMD.VERTICAL_SLIDER_MIN_HEIGHT), size.height)
             val height = (size.height * thumb.second).coerceIn(minHeight, size.height)
@@ -230,7 +233,7 @@ private fun PageScrollbar(
         }
         ScrollArrow(
             up = false,
-            active = !atEnd,
+            active = { !atEnd() },
             onClick = { onPage(true) },
             onLongClick = { onEnd(true) },
         )
@@ -311,26 +314,22 @@ private fun thumbOf(state: LazyListState, heights: Heights, atStart: Boolean, at
 @Composable
 private fun ScrollArrow(
     up: Boolean,
-    active: Boolean,
+    active: () -> Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
 ) {
-    val drawable = when {
-        up && active -> com.mudita.mmd.R.drawable.chevron_filled_up
-        up -> com.mudita.mmd.R.drawable.chevron_dotted_up
-        active -> com.mudita.mmd.R.drawable.chevron_filled_down
-        else -> com.mudita.mmd.R.drawable.chevron_dotted_down
+    // MMD's filled chevron when it can be used, its dotted one for "nothing more this way", as
+    // `LazyMMD.kt` draws them; chosen while drawing so the first frame shows the right one
+    val filled = painterResource(if (up) com.mudita.mmd.R.drawable.chevron_filled_up else com.mudita.mmd.R.drawable.chevron_filled_down)
+    val dotted = painterResource(if (up) com.mudita.mmd.R.drawable.chevron_dotted_up else com.mudita.mmd.R.drawable.chevron_dotted_down)
+    Canvas(
+        Modifier
+            .padding(vertical = PagedListDefaults.ScrollbarArrowPadding)
+            .size(PagedListDefaults.ScrollbarArrowSize)
+            .combinedClickable(onClick = { if (active()) onClick() }, onLongClick = { if (active()) onLongClick() }),
+    ) {
+        with(if (active()) filled else dotted) { draw(size) }
     }
-    Icon(
-        painter = painterResource(drawable),
-        contentDescription = null,
-        tint = Color.Unspecified,
-        modifier =
-            Modifier
-                .padding(vertical = PagedListDefaults.ScrollbarArrowPadding)
-                .size(PagedListDefaults.ScrollbarArrowSize)
-                .combinedClickable(enabled = active, onClick = onClick, onLongClick = onLongClick),
-    )
 }
 
 object PagedListDefaults {

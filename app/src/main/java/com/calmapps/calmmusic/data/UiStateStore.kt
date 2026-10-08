@@ -26,6 +26,13 @@ data class UiState(
     val selectedArtist: String? = null,
     val selectedArtistId: String? = null,
     val showNowPlaying: Boolean = false,
+    /** What the open album / artist / playlist page showed (seeds the PageCache on restore). */
+    val openAlbumSongs: List<SongUiModel> = emptyList(),
+    val openArtistSongs: List<SongUiModel> = emptyList(),
+    val openArtistAlbums: List<AlbumUiModel> = emptyList(),
+    val openArtistSingles: List<AlbumUiModel> = emptyList(),
+    val openPlaylistId: String? = null,
+    val openPlaylistSongs: List<SongUiModel> = emptyList(),
 )
 
 class UiStateStore(context: Context) {
@@ -72,6 +79,12 @@ class UiStateStore(context: Context) {
             .putOpt("selectedArtist", s.selectedArtist)
             .putOpt("selectedArtistId", s.selectedArtistId)
             .put("showNowPlaying", s.showNowPlaying)
+            .put("openAlbumSongs", s.openAlbumSongs.songsToJson())
+            .put("openArtistSongs", s.openArtistSongs.songsToJson())
+            .put("openArtistAlbums", s.openArtistAlbums.albumsToJson())
+            .put("openArtistSingles", s.openArtistSingles.albumsToJson())
+            .putOpt("openPlaylistId", s.openPlaylistId)
+            .put("openPlaylistSongs", s.openPlaylistSongs.songsToJson())
 
         fun decode(o: JSONObject): UiState = UiState(
             searchQuery = o.optString("searchQuery"),
@@ -84,6 +97,12 @@ class UiStateStore(context: Context) {
             selectedArtist = if (o.has("selectedArtist")) o.getString("selectedArtist") else null,
             selectedArtistId = if (o.has("selectedArtistId")) o.getString("selectedArtistId") else null,
             showNowPlaying = o.optBoolean("showNowPlaying"),
+            openAlbumSongs = o.optJSONArray("openAlbumSongs").toSongs(),
+            openArtistSongs = o.optJSONArray("openArtistSongs").toSongs(),
+            openArtistAlbums = o.optJSONArray("openArtistAlbums").toAlbums(),
+            openArtistSingles = o.optJSONArray("openArtistSingles").toAlbums(),
+            openPlaylistId = if (o.has("openPlaylistId")) o.getString("openPlaylistId") else null,
+            openPlaylistSongs = o.optJSONArray("openPlaylistSongs").toSongs(),
         )
     }
 }

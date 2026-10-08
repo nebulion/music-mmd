@@ -35,5 +35,6 @@ val navItems = listOf(
     Screen.Artists,
     Screen.Songs,
     Screen.Albums,
-    Screen.More,
 )
+// Downloads, Radio and Settings live in the top bar's ⋮ menu (owner, 2026-10-08): four tabs, which is
+// also MMD's limit for a navigation bar.

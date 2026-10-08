@@ -71,8 +71,10 @@ fun SearchScreen(
                 PagedList(contentPadding = PaddingValues(horizontal = 16.dp)) {
                     if (isSearching) {
                         item {
-                            TextMMD(text = "Searching...")
-                            Spacer(modifier = Modifier.height(8.dp))
+                            com.calmapps.calmmusic.ui.kit.DelayedText(
+                                "Searching",
+                                modifier = Modifier.fillMaxWidth().height(48.dp),
+                            )
                         }
                     }
 

@@ -48,7 +48,7 @@
         <service
             android:name=".MonoMusicAccessibilityService"
             android:exported="true"
-            android:label="Music helper"
+            android:label="MonoMusic helper"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />

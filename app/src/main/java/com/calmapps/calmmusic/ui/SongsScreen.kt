@@ -58,7 +58,7 @@ fun SongsScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center,
                 ) {
-                    TextMMD(text = "Loading songs...")
+                    com.calmapps.calmmusic.ui.kit.DelayedText("Loading")
                 }
             }
 

@@ -16,6 +16,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.ui.zIndex
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.animation.EnterTransition
@@ -138,11 +139,38 @@ class MainActivity : ComponentActivity() {
                 requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 0)
             }
         }
+        holdFirstDrawUntilReady()
         setContent {
             MmdTheme {
                 MonoMusic(app)
             }
         }
+    }
+
+    /**
+     * One paint on start (E Ink): the launcher stays on the panel (no starting window) and the
+     * app's first frame is held until the library and last queue are read, so the screen arrives
+     * complete instead of bar first, then "Loading", then rows. Never longer than [FIRST_DRAW_CEILING_MS].
+     */
+    private fun holdFirstDrawUntilReady() {
+        // the same instance the composition gets from viewModel(): one per activity
+        val viewModel = androidx.lifecycle.ViewModelProvider(this, MonoMusicViewModel.factory(app))[MonoMusicViewModel::class.java]
+        val content = findViewById<android.view.View>(android.R.id.content)
+        val start = android.os.SystemClock.uptimeMillis()
+        content.viewTreeObserver.addOnPreDrawListener(
+            object : android.view.ViewTreeObserver.OnPreDrawListener {
+                override fun onPreDraw(): Boolean {
+                    val ready = viewModel.firstScreenReady ||
+                        android.os.SystemClock.uptimeMillis() - start > FIRST_DRAW_CEILING_MS
+                    if (ready) content.viewTreeObserver.removeOnPreDrawListener(this)
+                    return ready
+                }
+            },
+        )
+    }
+
+    private companion object {
+        const val FIRST_DRAW_CEILING_MS = 1500L
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -175,7 +203,8 @@ fun MonoMusic(app: MonoMusic) {
     val playbackState by viewModel.playbackState.collectAsState()
     val downloadStatuses by app.youTubeDownloadManager.downloads.collectAsState()
 
-    var localMediaController by remember { mutableStateOf<MediaController?>(null) }
+    // Connected by the ViewModel before the first frame (see MonoMusicViewModel.connectController).
+    val localMediaController by viewModel.controller.collectAsState()
     var lastCompletedDownloadUUIDs by remember { mutableStateOf<Set<String>>(emptySet()) }
 
     val externalMediaState by ExternalMediaRepository.mediaState.collectAsState()
@@ -280,7 +309,23 @@ fun MonoMusic(app: MonoMusic) {
     var albumsError by remember { mutableStateOf<String?>(null) }
 
     // Where the owner was before the app went to the background (see UiStateStore).
-    val savedUi = remember { app.uiStateStore.load() }
+    val savedUi = remember {
+        app.uiStateStore.load().also { ui ->
+            // the page that was open draws straight from these after a restart
+            val cache = app.pageCache
+            ui.selectedAlbum?.let { a ->
+                if (ui.openAlbumSongs.isNotEmpty() && cache.album(a.sourceType, a.id) == null) cache.putAlbum(a.sourceType, a.id, ui.openAlbumSongs)
+            }
+            ui.selectedArtistId?.let { id ->
+                if ((ui.openArtistSongs.isNotEmpty() || ui.openArtistAlbums.isNotEmpty()) && cache.artist(id) == null) {
+                    cache.putArtist(id, MonoMusicViewModel.ArtistContent(ui.openArtistSongs, ui.openArtistAlbums, ui.openArtistSingles))
+                }
+            }
+            ui.openPlaylistId?.let { id ->
+                if (ui.openPlaylistSongs.isNotEmpty() && cache.playlist(id) == null) cache.putPlaylist(id, ui.openPlaylistSongs)
+            }
+        }
+    }
 
     var selectedAlbum by remember { mutableStateOf(savedUi.selectedAlbum) }
     var showRenameAlbumDialog by remember { mutableStateOf(false) }
@@ -347,6 +392,50 @@ fun MonoMusic(app: MonoMusic) {
 
     var settingsSelectedTab by remember { mutableStateOf(0) }
 
+    // ---- Opening pages in one paint -------------------------------------------------------
+    // A page is opened only once its content is loaded (PageCache), so its top bar and rows are
+    // drawn together. If loading takes over half a second, a "Loading" line shows meanwhile.
+    var openingJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    var showOpening by remember { mutableStateOf(false) }
+
+    fun openWhenReady(load: suspend () -> Unit, open: () -> Unit) {
+        if (openingJob?.isActive == true) return
+        openingJob = libraryScope.launch {
+            val hint = launch {
+                kotlinx.coroutines.delay(500)
+                showOpening = true
+            }
+            try {
+                load()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e // left the screen meanwhile: open nothing
+            } catch (_: Exception) {
+                // the page shows the error itself
+            }
+            hint.cancel()
+            showOpening = false
+            open()
+        }
+    }
+
+    fun openAlbum(album: AlbumUiModel) = openWhenReady(
+        load = { if (viewModel.cachedAlbumSongs(album) == null) viewModel.loadAlbumSongs(album) },
+        open = {
+            selectedAlbum = album
+            navController.navigate(Screen.AlbumDetails.route) { launchSingleTop = true }
+        },
+    )
+
+    fun openArtist(name: String, id: String, before: () -> Unit = {}) = openWhenReady(
+        load = { if (viewModel.cachedArtistContent(id) == null) viewModel.loadArtistContent(id) },
+        open = {
+            before()
+            selectedArtist = name
+            selectedArtistId = id
+            navController.navigate(Screen.ArtistDetails.route) { launchSingleTop = true }
+        },
+    )
+
     // Save where the owner is whenever the app leaves the screen.
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -362,6 +451,12 @@ fun MonoMusic(app: MonoMusic) {
                     selectedArtist = selectedArtist,
                     selectedArtistId = selectedArtistId,
                     showNowPlaying = showNowPlaying,
+                    openAlbumSongs = selectedAlbum?.let { app.pageCache.album(it.sourceType, it.id) }.orEmpty(),
+                    openArtistSongs = selectedArtistId?.let { app.pageCache.artist(it) }?.songs.orEmpty(),
+                    openArtistAlbums = selectedArtistId?.let { app.pageCache.artist(it) }?.albums.orEmpty(),
+                    openArtistSingles = selectedArtistId?.let { app.pageCache.artist(it) }?.singles.orEmpty(),
+                    openPlaylistId = selectedPlaylist?.id,
+                    openPlaylistSongs = selectedPlaylist?.id?.let { app.pageCache.playlist(it) }.orEmpty(),
                 )
                 // Not a composition scope: that is cancelled when the activity is destroyed.
                 kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch { app.uiStateStore.save(state) }
@@ -647,25 +742,6 @@ fun MonoMusic(app: MonoMusic) {
         libraryPlaylists = libraryPlaylistsState
     }
 
-    LaunchedEffect(Unit) {
-        val context = appContext
-        try {
-            val sessionToken = SessionToken(
-                context,
-                ComponentName(context, PlaybackService::class.java)
-            )
-            val future = MediaController.Builder(context, sessionToken).buildAsync()
-            future.addListener({
-                try {
-                    localMediaController = future.get()
-                } catch (_: Exception) {
-                }
-            }, ContextCompat.getMainExecutor(context))
-        } catch (e: Exception) {
-            Log.e("MainActivity", "Failed to connect to PlaybackService", e)
-        }
-    }
-
     LaunchedEffect(localMediaController) {
         val controller = localMediaController ?: return@LaunchedEffect
         viewModel.startLocalPlaybackMonitoring(controller)
@@ -734,16 +810,22 @@ fun MonoMusic(app: MonoMusic) {
         }
     }
 
-    fun NavGraphBuilder.playlistsNavGraph() {
+    fun NavGraphBuilder.playlistsNavGraph(chrome: @Composable (String, @Composable () -> Unit) -> Unit) {
         composable(Screen.Playlists.route) {
+ chrome(Screen.Playlists.route) {
             PlaylistsScreen(
                 playlists = libraryPlaylists,
                 isInEditMode = isPlaylistsEditMode,
                 onPlaylistClick = { playlist: PlaylistUiModel ->
-                    selectedPlaylist = playlist
-                    navController.navigate("${Screen.PlaylistDetails.route}/${playlist.id}") {
-                        launchSingleTop = true
-                    }
+                    openWhenReady(
+                        load = { if (playlistsViewModel.cachedPlaylistSongs(playlist.id) == null) playlistsViewModel.loadPlaylistSongs(playlist.id) },
+                        open = {
+                            selectedPlaylist = playlist
+                            navController.navigate("${Screen.PlaylistDetails.route}/${playlist.id}") {
+                                launchSingleTop = true
+                            }
+                        },
+                    )
                 },
                 onAddPlaylistClick = {
                     selectedPlaylist = null
@@ -758,11 +840,13 @@ fun MonoMusic(app: MonoMusic) {
                 },
             )
         }
+}
 
         composable(
             route = "${Screen.PlaylistDetails.route}/{playlistId}",
             arguments = listOf(navArgument("playlistId") { type = NavType.StringType })
         ) { backStackEntry ->
+ chrome("${Screen.PlaylistDetails.route}/{playlistId}") {
             val playlistId = backStackEntry.arguments?.getString("playlistId")
 
             LaunchedEffect(playlistId, libraryPlaylists) {
@@ -809,7 +893,9 @@ fun MonoMusic(app: MonoMusic) {
                 onDeleteClick = onDelete,
             )
         }
+}
         composable(Screen.PlaylistAddSongs.route) {
+ chrome(Screen.PlaylistAddSongs.route) {
             var existingIds by remember { mutableStateOf(emptySet<String>()) }
             LaunchedEffect(selectedPlaylist?.id) {
                 val id = selectedPlaylist?.id
@@ -831,7 +917,9 @@ fun MonoMusic(app: MonoMusic) {
                 },
             )
         }
+}
         composable(Screen.PlaylistEdit.route) {
+ chrome(Screen.PlaylistEdit.route) {
             val editing = selectedPlaylist
             PlaylistEditScreen(
                 initialName = editing?.name ?: "",
@@ -890,14 +978,20 @@ fun MonoMusic(app: MonoMusic) {
                 },
             )
         }
+}
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        Scaffold(
-            topBar = {
+        // Every page draws its own bars (owner, 2026-10-08: "the top bar changes but not the
+        // content"). NavHost shows a new destination a frame or more after the back stack
+        // changes; bars outside it switched first, so a screen change painted twice. Inside it,
+        // bar, page and tabs swap in one frame.
+        val chrome: @Composable (String, @Composable () -> Unit) -> Unit = { route, page ->
+            Scaffold(
+                topBar = {
                 Column {
                     MonoMusicTopAppBar(
-                        currentDestination = currentDestination,
+                        currentRoute = route,
                         canNavigateBack = canNavigateBack,
                         focusRequester = focusRequester,
                         searchQuery = searchQuery,
@@ -911,10 +1005,17 @@ fun MonoMusic(app: MonoMusic) {
                         playlistEditSelectionCount = playlistEditSelectionCount,
                         playlistDetailsSelectionCount = playlistDetailsSelectionCount,
                         isPlaylistDetailsMenuExpanded = isPlaylistDetailsMenuExpanded,
-                        canDownloadSelectedAlbum = selectedAlbum?.sourceType == "YOUTUBE",
+                        // a YouTube album, or one downloaded from YouTube (maybe only partly): the
+                        // button is there from the first frame; a tap finds what's still missing
+                        canDownloadSelectedAlbum = selectedAlbum?.let { a ->
+                            a.sourceType == "YOUTUBE" ||
+                                app.pageCache.album(a.sourceType, a.id)
+                                    ?.any { it.sourceType == "YOUTUBE_DOWNLOAD" || it.sourceType == "YOUTUBE" } == true
+                        } == true,
                         canRenameSelectedAlbum = selectedAlbum?.sourceType == "LOCAL_FILE" ||
                                 selectedAlbum?.sourceType == "YOUTUBE_DOWNLOAD",
                         onArtistShuffleClick = artistShuffle,
+                        onOpenPage = { route -> navController.navigate(route) { launchSingleTop = true } },
                         onBackClick = { navController.navigateUp() },
                         onCancelPlaylistsEditClick = {
                             isPlaylistsEditMode = false
@@ -970,7 +1071,14 @@ fun MonoMusic(app: MonoMusic) {
                             if (album != null) {
                                 libraryScope.launch {
                                     val songs = try {
-                                        viewModel.getAlbumSongsForDetails(album)
+                                        if (album.sourceType == "YOUTUBE") {
+                                            viewModel.getAlbumSongsForDetails(album)
+                                        } else {
+                                            // partly downloaded: the album's songs that aren't on the phone
+                                            viewModel.missingAlbumSongs(album)
+                                        }
+                                    } catch (e: kotlinx.coroutines.CancellationException) {
+                                        throw e
                                     } catch (_: Exception) {
                                         emptyList()
                                     }
@@ -984,7 +1092,7 @@ fun MonoMusic(app: MonoMusic) {
 
                                     if (toDownload.isEmpty()) {
                                         snackbarHostState.showSnackbar(
-                                            message = "Nothing to download",
+                                            message = if (album.sourceType == "YOUTUBE") "Nothing to download" else "Album is complete",
                                             withDismissAction = false,
                                             duration = SnackbarDurationMMD.Short,
                                         )
@@ -1071,14 +1179,14 @@ fun MonoMusic(app: MonoMusic) {
                     HorizontalDividerMMD(thickness = 3.dp)
                 }
             },
-            bottomBar = {
+                bottomBar = {
                 MonoMusicBottomBar(
                     playingTitle = nowPlayingSong?.title,
                     playingArtist = nowPlayingSong?.artist.orEmpty(),
                     isPlaying = isPlaybackPlaying,
                     onOpenNowPlaying = { showNowPlaying = true },
                     onPlayPause = { togglePlayback() },
-                    currentDestination = currentDestination,
+                    currentRoute = route,
                     onNavigate = { route ->
                         navController.navigate(route) {
                             popUpTo(navController.graph.startDestinationId) { saveState = true }
@@ -1088,21 +1196,45 @@ fun MonoMusic(app: MonoMusic) {
                     },
                 )
             },
-            snackbarHost = {},
-        ) { paddingValues ->
+                snackbarHost = {},
+            ) { paddingValues ->
+                Box(Modifier.fillMaxSize().padding(paddingValues)) {
+                    page()
+            if (showOpening) {
+                Column(
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                                                .fillMaxWidth()
+                        .background(androidx.compose.ui.graphics.Color.White)
+                        .zIndex(1f),
+                ) {
+                    HorizontalDividerMMD(thickness = 3.dp)
+                    TextMMD(
+                        text = "Loading",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(16.dp),
+                    )
+                }
+            }
+                }
+            }
+        }
+
+        Box(Modifier.fillMaxSize()) {
             NavHost(
                 navController = navController,
                 startDestination = Screen.Songs.route,
-                modifier = Modifier.padding(paddingValues),
+                modifier = Modifier.fillMaxSize(),
                 // E-ink: screen transition animations cause slow, ghosting refreshes.
                 enterTransition = { EnterTransition.None },
                 exitTransition = { ExitTransition.None },
                 popEnterTransition = { EnterTransition.None },
                 popExitTransition = { ExitTransition.None },
             ) {
-                playlistsNavGraph()
+                playlistsNavGraph(chrome)
 
                 composable(Screen.Artists.route) {
+ chrome(Screen.Artists.route) {
                     ArtistsScreen(
                         artists = libraryArtists,
                         isLoading = isLoadingSongs || isLoadingAlbums,
@@ -1112,16 +1244,13 @@ fun MonoMusic(app: MonoMusic) {
                         onOpenStreamingSettingsClick = openStreamingSettings,
                         onOpenLocalSettingsClick = openLocalSettings,
                         onArtistClick = { artist ->
-                            val artistName = artist.name
-                            selectedArtist = artistName
-                            selectedArtistId = artist.id
-                            navController.navigate(Screen.ArtistDetails.route) {
-                                launchSingleTop = true
-                            }
+                            openArtist(artist.name, artist.id)
                         },
                     )
                 }
+}
                 composable(Screen.Songs.route) {
+ chrome(Screen.Songs.route) {
                     SongsScreen(
                         songs = librarySongs,
                         isLoading = isLoadingSongs,
@@ -1148,7 +1277,9 @@ fun MonoMusic(app: MonoMusic) {
                         onOpenLocalSettingsClick = openLocalSettings,
                     )
                 }
+}
                 composable(Screen.Albums.route) {
+ chrome(Screen.Albums.route) {
                     AlbumsScreen(
                         albums = libraryAlbums,
                         isLoading = isLoadingAlbums,
@@ -1157,15 +1288,12 @@ fun MonoMusic(app: MonoMusic) {
                         hasAnySongs = hasAnySongs,
                         onOpenStreamingSettingsClick = openStreamingSettings,
                         onOpenLocalSettingsClick = openLocalSettings,
-                        onAlbumClick = { album ->
-                            selectedAlbum = album
-                            navController.navigate(Screen.AlbumDetails.route) {
-                                launchSingleTop = true
-                            }
-                        },
+                        onAlbumClick = { album -> openAlbum(album) },
                     )
                 }
+}
                 composable(Screen.Search.route) {
+ chrome(Screen.Search.route) {
                     SearchScreen(
                         isSearching = isSearching,
                         errorMessage = searchError,
@@ -1187,21 +1315,14 @@ fun MonoMusic(app: MonoMusic) {
                                 startPlaybackFromQueue(songs, startIndex)
                             }
                         },
-                        onAlbumClick = { album: AlbumUiModel ->
-                            selectedAlbum = album
-                            navController.navigate(Screen.AlbumDetails.route) {
-                                launchSingleTop = true
-                            }
-                        },
-                        onArtistClick = { artist ->
-                            selectedArtist = artist.name
-                            selectedArtistId = artist.id
-                            navController.navigate(Screen.ArtistDetails.route) { launchSingleTop = true }
-                        },
+                        onAlbumClick = { album: AlbumUiModel -> openAlbum(album) },
+                        onArtistClick = { artist -> openArtist(artist.name, artist.id) },
                         librarySongIds = librarySongIds,
                     )
                 }
+}
                 composable(Screen.AlbumDetails.route) {
+ chrome(Screen.AlbumDetails.route) {
                     AlbumDetailsScreen(
                         album = selectedAlbum,
                         viewModel = viewModel,
@@ -1224,7 +1345,9 @@ fun MonoMusic(app: MonoMusic) {
                         librarySongIds = librarySongIds,
                     )
                 }
+}
                 composable(Screen.ArtistDetails.route) {
+ chrome(Screen.ArtistDetails.route) {
                     ArtistDetailsScreen(
                         artistId = selectedArtistId ?: libraryArtists.find { it.name == selectedArtist }?.id,
                         viewModel = viewModel,
@@ -1233,10 +1356,7 @@ fun MonoMusic(app: MonoMusic) {
                             val startIndex = if (index >= 0) index else 0
                             startPlaybackFromQueue(songs, startIndex)
                         },
-                        onAlbumClick = { album ->
-                            selectedAlbum = album
-                            navController.navigate(Screen.AlbumDetails.route) { launchSingleTop = true }
-                        },
+                        onAlbumClick = { album -> openAlbum(album) },
                         onShuffleAvailable = { songs ->
                             artistShuffle = songs?.let { { startShuffledPlaybackFromQueue(it) } }
                         },
@@ -1245,8 +1365,10 @@ fun MonoMusic(app: MonoMusic) {
                         onDeleteClick = onDelete,
                     )
                 }
+}
 
                 composable(Screen.More.route) {
+ chrome(Screen.More.route) {
                     MoreScreen(
                         onNavigateToDownloads = {
                             navController.navigate(Screen.Downloads.route) {
@@ -1266,16 +1388,20 @@ fun MonoMusic(app: MonoMusic) {
                         },
                     )
                 }
+}
 
                 composable(Screen.Radio.route) {
+ chrome(Screen.Radio.route) {
                     RadioScreen(
                         onNavigateBack = { navController.popBackStack() },
                         onPausePlayback = { viewModel.togglePlayback(localMediaController) },
                         isAppPlaying = playbackState.isPlaybackPlaying
                     )
                 }
+}
 
                 composable(Screen.Downloads.route) {
+ chrome(Screen.Downloads.route) {
                     val downloads by app.youTubeDownloadManager.downloads.collectAsStateWithLifecycle()
 
                     DownloadsScreen(
@@ -1284,8 +1410,10 @@ fun MonoMusic(app: MonoMusic) {
                         onClearFinished = { app.youTubeDownloadManager.clearFinishedDownloads() }
                     )
                 }
+}
 
                 composable(Screen.Settings.route) {
+ chrome(Screen.Settings.route) {
                     val context = LocalContext.current
                     val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -1336,6 +1464,7 @@ fun MonoMusic(app: MonoMusic) {
                         localScanDeletedMissing = localScanDeletedMissing,
                     )
                 }
+}
             }
         }
 
@@ -1382,12 +1511,8 @@ fun MonoMusic(app: MonoMusic) {
                 ?: libraryArtists.firstOrNull { it.name.equals(song.artist, ignoreCase = true) }?.id
             NowPlayingScreen(
                 onArtistClick = artistTarget?.let { id ->
-                    {
-                        showNowPlaying = false
-                        selectedArtist = song.artist
-                        selectedArtistId = id
-                        navController.navigate(Screen.ArtistDetails.route) { launchSingleTop = true }
-                    }
+                    // Now Playing closes in the same frame the artist page opens
+                    { openArtist(song.artist, id, before = { showNowPlaying = false }) }
                 },
                 title = song.title,
                 artist = song.artist.ifBlank { if (song.sourceType == "LOCAL_FILE" || song.sourceType == "YOUTUBE_DOWNLOAD") "Local file" else "" },
@@ -2111,23 +2236,23 @@ fun isNotificationServiceEnabled(context: android.content.Context): Boolean {
 }
 
 @Composable
-fun getAppBarTitle(currentDestination: NavDestination?): String {
+fun getAppBarTitle(currentRoute: String?): String {
     return when {
-        currentDestination?.route == Screen.Playlists.route -> "Playlists"
-        currentDestination?.route == Screen.Songs.route -> "Songs"
-        currentDestination?.route == Screen.Albums.route -> "Albums"
-        currentDestination?.route == Screen.AlbumDetails.route -> "Album"
-        currentDestination?.route == Screen.Artists.route -> "Artists"
-        currentDestination?.route == Screen.ArtistDetails.route -> "Artist"
-        currentDestination?.route == Screen.Search.route -> "Search"
-        currentDestination?.route == Screen.More.route -> "More"
-        currentDestination?.route == Screen.Radio.route -> "Radio"
-        currentDestination?.route == Screen.Downloads.route -> "Downloads"
-        currentDestination?.route == Screen.Settings.route -> "Settings"
-        currentDestination?.route == Screen.PlaylistEdit.route -> "Edit Playlist"
-        currentDestination?.route == Screen.PlaylistAddSongs.route -> "Add Songs"
-        currentDestination?.route == Screen.PlaylistDetails.route -> "Playlist"
-        currentDestination?.route?.startsWith("playlistDetails/") == true -> "Playlist"
+        currentRoute == Screen.Playlists.route -> "Playlists"
+        currentRoute == Screen.Songs.route -> "Songs"
+        currentRoute == Screen.Albums.route -> "Albums"
+        currentRoute == Screen.AlbumDetails.route -> "Album"
+        currentRoute == Screen.Artists.route -> "Artists"
+        currentRoute == Screen.ArtistDetails.route -> "Artist"
+        currentRoute == Screen.Search.route -> "Search"
+        currentRoute == Screen.More.route -> "More"
+        currentRoute == Screen.Radio.route -> "Radio"
+        currentRoute == Screen.Downloads.route -> "Downloads"
+        currentRoute == Screen.Settings.route -> "Settings"
+        currentRoute == Screen.PlaylistEdit.route -> "Edit Playlist"
+        currentRoute == Screen.PlaylistAddSongs.route -> "Add Songs"
+        currentRoute == Screen.PlaylistDetails.route -> "Playlist"
+        currentRoute?.startsWith("playlistDetails/") == true -> "Playlist"
         else -> ""
     }
 }

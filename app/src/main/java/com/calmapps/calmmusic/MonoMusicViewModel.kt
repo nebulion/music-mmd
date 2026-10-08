@@ -292,9 +292,7 @@ class MonoMusicViewModel(
      * Kompakt destroys the activity and this ViewModel. On return the player is the
      * truth — take its queue and position instead of the saved snapshot.
      */
-    private suspend fun adoptPlayerQueue(controller: MediaController) {
-        // The snapshot restore runs in init; let it land first so it can't overwrite this.
-        restoreJob?.join()
+    private fun adoptPlayerQueue(controller: MediaController) {
         val count = controller.mediaItemCount
         if (count == 0) return
         val state = _playbackState.value
@@ -331,68 +329,104 @@ class MonoMusicViewModel(
         persistPlaybackSnapshot()
     }
 
+    /** The connection to the playback service; made by this ViewModel before the first frame. */
+    private val _controller = MutableStateFlow<MediaController?>(null)
+    val controller: StateFlow<MediaController?> = _controller.asStateFlow()
+    private var controllerFuture: com.google.common.util.concurrent.ListenableFuture<MediaController>? = null
+    private var controllerListener: Player.Listener? = null
+
+    private suspend fun connectController(): MediaController? {
+        val token = androidx.media3.session.SessionToken(app, android.content.ComponentName(app, PlaybackService::class.java))
+        val future = MediaController.Builder(app, token).buildAsync()
+        controllerFuture = future
+        return kotlinx.coroutines.suspendCancellableCoroutine { cont ->
+            future.addListener(
+                { cont.resume(runCatching { future.get() }.getOrNull()) { _, _, _ -> } },
+                androidx.core.content.ContextCompat.getMainExecutor(app),
+            )
+        }
+    }
+
     /**
-     * Mirrors the player into [PlaybackState] once a second: position, buffering,
-     * and the queue index (the player advances on its own). The playback
-     * service keeps the YouTube precache window, so it works in the background.
+     * Mirrors the player into [PlaybackState]: at once on every player event (song change,
+     * play/pause, buffering, seek), and the position once a second while playing. Before, it only
+     * polled every 1–2 s, so after returning to the app Now Playing showed the old song for a while.
      */
     fun startLocalPlaybackMonitoring(controller: MediaController) {
+        if (playbackMonitorJob?.isActive == true && controllerListener != null) return
         playbackMonitorJob?.cancel()
+        val wake = kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.CONFLATED)
+        val listener = object : Player.Listener {
+            override fun onEvents(player: Player, events: Player.Events) {
+                wake.trySend(Unit)
+            }
+        }
+        controllerListener?.let { controller.removeListener(it) }
+        controllerListener = listener
+        controller.addListener(listener)
+
         playbackMonitorJob = viewModelScope.launch {
-            adoptPlayerQueue(controller)
             var lastPersistElapsedMs = 0L
 
             while (true) {
+                // the player is the truth: a queue it has that we don't (set elsewhere) is taken over
+                if (controller.mediaItemCount > 0 &&
+                    (controller.mediaItemCount != _playbackState.value.playbackQueue.size ||
+                        controller.currentMediaItem?.mediaId !in _playbackState.value.playbackQueue.map { it.id })
+                ) {
+                    adoptPlayerQueue(controller)
+                }
+
                 val state = _playbackState.value
                 val queue = state.playbackQueue
-
-                if (queue.isEmpty() || controller.mediaItemCount == 0) {
-                    delay(2000L)
-                    continue
-                }
-
                 val isPlaying = controller.playWhenReady && controller.playbackState != Player.STATE_ENDED
-                val position = controller.currentPosition
-                val duration = controller.duration
-                val isBufferingNow = controller.playbackState == Player.STATE_BUFFERING
 
-                var newState = state.copy(
-                    isPlaybackPlaying = isPlaying,
-                    nowPlayingPositionMs = position,
-                    nowPlayingDurationMs = if (duration > 0) duration else state.nowPlayingDurationMs,
-                    isBuffering = isBufferingNow,
-                )
+                if (queue.isNotEmpty() && controller.mediaItemCount > 0) {
+                    val position = controller.currentPosition
+                    val duration = controller.duration
+                    val isBufferingNow = controller.playbackState == Player.STATE_BUFFERING
 
-                val currentMediaId = controller.currentMediaItem?.mediaId
-                if (currentMediaId != null) {
-                    val targetIndex = queue.indexOfFirst { it.id == currentMediaId }
-                    if (targetIndex >= 0 && targetIndex != state.playbackQueueIndex) {
-                        val newSong = queue[targetIndex]
-                        newState = newState.copy(
-                            playbackQueueIndex = targetIndex,
-                            currentSongId = newSong.id,
-                            nowPlayingSong = newSong,
-                            nowPlayingDurationMs = newSong.durationMillis ?: newState.nowPlayingDurationMs,
-                        )
+                    var newState = state.copy(
+                        isPlaybackPlaying = isPlaying,
+                        nowPlayingPositionMs = position,
+                        nowPlayingDurationMs = if (duration > 0) duration else state.nowPlayingDurationMs,
+                        isBuffering = isBufferingNow,
+                    )
+
+                    val currentMediaId = controller.currentMediaItem?.mediaId
+                    if (currentMediaId != null) {
+                        val targetIndex = queue.indexOfFirst { it.id == currentMediaId }
+                        if (targetIndex >= 0 && targetIndex != state.playbackQueueIndex) {
+                            val newSong = queue[targetIndex]
+                            newState = newState.copy(
+                                playbackQueueIndex = targetIndex,
+                                currentSongId = newSong.id,
+                                nowPlayingSong = newSong,
+                                nowPlayingDurationMs = newSong.durationMillis ?: newState.nowPlayingDurationMs,
+                            )
+                        }
+                    }
+
+                    if (newState != state) {
+                        _playbackState.value = newState
+                        // Persist on meaningful changes; position-only ticks at most every 5s.
+                        val significantChange = newState.currentSongId != state.currentSongId ||
+                            newState.isPlaybackPlaying != state.isPlaybackPlaying ||
+                            newState.playbackQueueIndex != state.playbackQueueIndex
+                        val nowElapsedMs = android.os.SystemClock.elapsedRealtime()
+                        if (significantChange || nowElapsedMs - lastPersistElapsedMs >= 5000L) {
+                            lastPersistElapsedMs = nowElapsedMs
+                            persistPlaybackSnapshot(newState)
+                        }
                     }
                 }
 
-                if (newState != state) {
-                    _playbackState.value = newState
-                    // Persist on meaningful changes; position-only ticks at most every 5s.
-                    val significantChange = newState.currentSongId != state.currentSongId ||
-                        newState.isPlaybackPlaying != state.isPlaybackPlaying ||
-                        newState.playbackQueueIndex != state.playbackQueueIndex
-                    val nowElapsedMs = android.os.SystemClock.elapsedRealtime()
-                    if (significantChange || nowElapsedMs - lastPersistElapsedMs >= 5000L) {
-                        lastPersistElapsedMs = nowElapsedMs
-                        persistPlaybackSnapshot(newState)
-                    }
+                // Next: a player event, or the next second of position while playing.
+                if (isPlaying) {
+                    kotlinx.coroutines.withTimeoutOrNull(1000L) { wake.receive() }
+                } else {
+                    wake.receive()
                 }
-
-                // Every state emission recomposes the whole UI tree; on e-ink 1s is
-                // plenty for the position display and keeps the device responsive.
-                delay(if (isPlaying) 1000L else 2000L)
             }
         }
     }
@@ -536,6 +570,20 @@ class MonoMusicViewModel(
     /** Albums already looked up this session, successful or not. */
     private val orderRepairAttempted = mutableSetOf<String>()
 
+    // ------------------------------------------------------------------
+    // Page content: loaded before a page opens, kept in app.pageCache
+    // ------------------------------------------------------------------
+
+    fun cachedAlbumSongs(album: AlbumUiModel): List<SongUiModel>? = app.pageCache.album(album.sourceType, album.id)
+
+    suspend fun loadAlbumSongs(album: AlbumUiModel): List<SongUiModel> =
+        getAlbumSongsForDetails(album).also { app.pageCache.putAlbum(album.sourceType, album.id, it) }
+
+    fun cachedArtistContent(artistId: String): ArtistContent? = app.pageCache.artist(artistId)
+
+    suspend fun loadArtistContent(artistId: String): ArtistContent =
+        getArtistContent(artistId).also { app.pageCache.putArtist(artistId, it) }
+
     suspend fun getAlbumSongsForDetails(album: AlbumUiModel): List<SongUiModel> {
         var localSongs = getAlbumSongs(album.id)
 
@@ -568,6 +616,16 @@ class MonoMusicViewModel(
         }
 
         return if (album.sourceType == "YOUTUBE") getYouTubeAlbumSongs(album) else emptyList()
+    }
+
+    /**
+     * The songs of [album]'s YouTube Music track list that aren't on the phone yet: what "finish
+     * downloading" fetches for an album that was only partly downloaded.
+     */
+    suspend fun missingAlbumSongs(album: AlbumUiModel): List<SongUiModel> {
+        val local = getAlbumSongs(album.id).filter { it.sourceType != "YOUTUBE" }
+        val remote = getYouTubeAlbumSongs(album)
+        return remote.filter { yt -> local.none { areSongsMatching(it, yt) } }
     }
 
     private fun mergeLocalAndYouTubeAlbums(
@@ -981,21 +1039,36 @@ class MonoMusicViewModel(
     override fun onCleared() {
         super.onCleared()
         playbackMonitorJob?.cancel()
+        controllerListener?.let { l -> _controller.value?.removeListener(l) }
+        controllerFuture?.let { MediaController.releaseFuture(it) }
     }
 
     private var restoreJob: kotlinx.coroutines.Job? = null
 
-    init {
-        restoreJob = viewModelScope.launch {
-            try {
-                libraryRepository.sync(
-                    includeLocal = app.settingsManager.includeLocalMusic.value,
-                    folders = app.settingsManager.localMusicFolders.value,
-                )
-            } catch (_: Exception) {
-            }
+    /**
+     * True once the first screen has what it needs (library read, player connected, queue known),
+     * so the activity can hold its first frame until then and paint once.
+     */
+    @Volatile
+    var firstScreenReady: Boolean = false
+        private set
 
+    init {
+        // First what the first screen shows (the library as stored, the last queue), so the
+        // activity paints once; the folder sync and repairs run after and only repaint on change.
+        restoreJob = viewModelScope.launch {
             refreshLibraryFromDatabase()
+
+            val controller = kotlinx.coroutines.withTimeoutOrNull(1000L) { connectController() }
+            _controller.value = controller
+            if (controller != null && controller.mediaItemCount > 0) {
+                adoptPlayerQueue(controller)
+                startLocalPlaybackMonitoring(controller)
+                _isLoadingSongs.value = false
+                _isLoadingAlbums.value = false
+                firstScreenReady = true
+                return@launch
+            }
 
             // Restore the last queue without starting playback.
             val snapshot = withContext(Dispatchers.IO) { nowPlayingStorage.load() }
@@ -1033,6 +1106,19 @@ class MonoMusicViewModel(
 
             _isLoadingSongs.value = false
             _isLoadingAlbums.value = false
+            firstScreenReady = true
+            if (controller != null) startLocalPlaybackMonitoring(controller)
+        }
+        viewModelScope.launch {
+            restoreJob?.join()
+            try {
+                libraryRepository.sync(
+                    includeLocal = app.settingsManager.includeLocalMusic.value,
+                    folders = app.settingsManager.localMusicFolders.value,
+                )
+            } catch (_: Exception) {
+            }
+            refreshLibraryFromDatabase()
 
             // Give pre-rewrite downloads their YouTube identity back.
             try {

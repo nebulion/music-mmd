@@ -46,13 +46,17 @@ fun ArtistDetailsScreen(
     onRemoveFromLibraryClick: (SongUiModel) -> Unit,
     onDeleteClick: (SongUiModel) -> Unit,
 ) {
-    var songs by remember { mutableStateOf<List<SongUiModel>>(emptyList()) }
-    var albums by remember { mutableStateOf<List<AlbumUiModel>>(emptyList()) }
-    var singles by remember { mutableStateOf<List<AlbumUiModel>>(emptyList()) }
-    var isLoading by remember { mutableStateOf(true) }
+    // Opened only once its content is cached (see PageCache): drawn complete, in one paint.
+    val cached = remember(artistId) { artistId?.let { viewModel.cachedArtistContent(it) } }
+    var songs by remember(artistId) { mutableStateOf(cached?.songs ?: emptyList()) }
+    var albums by remember(artistId) { mutableStateOf(cached?.albums ?: emptyList()) }
+    var singles by remember(artistId) { mutableStateOf(cached?.singles ?: emptyList()) }
+    var isLoading by remember(artistId) { mutableStateOf(artistId != null && cached == null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    var selectedTab by rememberSaveable(artistId) {
+        mutableIntStateOf(if (cached != null && cached.albums.isEmpty() && cached.singles.isEmpty() && cached.songs.isNotEmpty()) 1 else 0)
+    }
     // Singles only when the artist has any (YouTube artists); at most three tabs.
     val tabOptions = if (singles.isEmpty()) listOf("Albums", "Songs") else listOf("Albums", "Singles", "Songs")
     val songsTab = tabOptions.lastIndex
@@ -71,16 +75,17 @@ fun ArtistDetailsScreen(
             isLoading = false
             return@LaunchedEffect
         }
-        isLoading = true
-        errorMessage = null
         try {
-            val content = viewModel.getArtistContent(artistId)
-            songs = content.songs
-            albums = content.albums
-            singles = content.singles
-            if (albums.isEmpty() && singles.isEmpty() && songs.isNotEmpty()) selectedTab = 1
+            // a quiet refresh: the page only changes if the content did
+            val content = viewModel.loadArtistContent(artistId)
+            if (content.songs != songs) songs = content.songs
+            if (content.albums != albums) albums = content.albums
+            if (content.singles != singles) singles = content.singles
+            errorMessage = null
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e // the page was left or reloaded: not an error
         } catch (e: Exception) {
-            errorMessage = e.message ?: "Failed to load artist"
+            if (songs.isEmpty() && albums.isEmpty() && singles.isEmpty()) errorMessage = e.message ?: "Couldn't load this artist"
         } finally {
             isLoading = false
         }
@@ -95,7 +100,7 @@ fun ArtistDetailsScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center,
                 ) {
-                    TextMMD(text = "Loading artist...")
+                    com.calmapps.calmmusic.ui.kit.DelayedText("Loading")
                 }
             }
 

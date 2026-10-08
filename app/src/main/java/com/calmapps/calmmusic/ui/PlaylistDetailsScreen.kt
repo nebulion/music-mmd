@@ -58,8 +58,10 @@ fun PlaylistDetailsScreen(
     onDeleteClick: (SongUiModel) -> Unit,
 ) {
     // Local State
-    var songs by remember { mutableStateOf<List<SongUiModel>>(emptyList()) }
-    var isLoading by remember { mutableStateOf(true) }
+    // Opened only once its songs are cached (see PageCache): drawn complete, in one paint.
+    val cached = remember(playlistId) { playlistId?.let { playlistsViewModel.cachedPlaylistSongs(it) } }
+    var songs by remember(playlistId) { mutableStateOf(cached ?: emptyList()) }
+    var isLoading by remember(playlistId) { mutableStateOf(playlistId != null && cached == null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
     val scope = rememberCoroutineScope()
@@ -74,10 +76,13 @@ fun PlaylistDetailsScreen(
             isLoading = false
             return@LaunchedEffect
         }
-        isLoading = true
-        errorMessage = null
         try {
-            songs = playlistsViewModel.getPlaylistSongs(playlistId)
+            // a quiet refresh: the page only changes if the songs did
+            val fresh = playlistsViewModel.loadPlaylistSongs(playlistId)
+            if (fresh != songs) songs = fresh
+            errorMessage = null
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e // the page was left or reloaded: not an error
         } catch (e: Exception) {
             errorMessage = e.message ?: "Failed to load playlist songs"
         } finally {
@@ -103,6 +108,8 @@ fun PlaylistDetailsScreen(
             scope.launch {
                 try {
                     playlistsViewModel.updatePlaylistOrder(playlistId, currentList)
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e // the page was left or reloaded: not an error
                 } catch (e: Exception) {
                     errorMessage = "Failed to save order"
                 }
@@ -119,7 +126,7 @@ fun PlaylistDetailsScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center,
                 ) {
-                    TextMMD(text = "Loading playlist...")
+                    com.calmapps.calmmusic.ui.kit.DelayedText("Loading")
                 }
             }
 
