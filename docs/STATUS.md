@@ -141,6 +141,13 @@ artist drew the bar first, then "Loading…", then rows.
 Measured after: cold start 0.79 s (first frame complete), tab switch 2–3 frames (from 3–4) before the last
 two fixes; not re-measured after them because the owner was using the phone.
 
+### 2026-10-08 — artist pages, radio
+- Artist pages always show the YouTube Music discography, also for library artists (matched by exact name).
+  Albums on the phone replace their YouTube twins and open your files; library albums YouTube doesn't list are
+  kept. Offline or no match: the library alone. Album rows not on the phone show ☁, like song rows.
+- Radio is off (not in the menu; its code and services remain).
+- Waiting for picks: `docs/mockups/round2-options.html` (download feedback, Downloads page, sorting).
+
 ## Owner's decisions
 - 2026-10-07: fork MonoMusic only; CalmMusic compared and not used.
 - 2026-10-07: full Kompakt treatment, like Macros and Fit.

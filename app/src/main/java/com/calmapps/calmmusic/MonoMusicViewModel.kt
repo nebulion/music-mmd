@@ -581,8 +581,8 @@ class MonoMusicViewModel(
 
     fun cachedArtistContent(artistId: String): ArtistContent? = app.pageCache.artist(artistId)
 
-    suspend fun loadArtistContent(artistId: String): ArtistContent =
-        getArtistContent(artistId).also { app.pageCache.putArtist(artistId, it) }
+    suspend fun loadArtistContent(artistId: String, name: String? = null): ArtistContent =
+        getArtistContent(artistId, name).also { app.pageCache.putArtist(artistId, it) }
 
     suspend fun getAlbumSongsForDetails(album: AlbumUiModel): List<SongUiModel> {
         var localSongs = getAlbumSongs(album.id)
@@ -743,8 +743,76 @@ class MonoMusicViewModel(
     )
 
     /** `UC…` ids are YouTube artists; anything else is a library artist key. */
-    suspend fun getArtistContent(artistId: String): ArtistContent =
-        if (artistId.startsWith("UC")) getYouTubeArtistContent(artistId) else withContext(Dispatchers.IO) {
+    /**
+     * An artist's page (owner, 2026-10-08): their whole YouTube Music discography, with what is on the
+     * phone marked, whether they were opened from the library or from search. The library's albums
+     * replace their YouTube twins (so they play the files), and library albums YouTube doesn't list
+     * are kept. Offline, or when YouTube has no artist by that exact name: the library alone.
+     */
+    suspend fun getArtistContent(artistId: String, name: String? = null): ArtistContent = coroutineScope {
+        val isYouTube = artistId.startsWith("UC")
+        val localKey = if (isYouTube) {
+            name?.let { n -> _libraryArtists.value.firstOrNull { it.name.equals(n, ignoreCase = true) }?.id }
+        } else {
+            artistId
+        }
+        val local = localKey?.let { getLibraryArtistContent(it) }
+        val artistName = name ?: _libraryArtists.value.firstOrNull { it.id == artistId }?.name
+        val youTubeId = if (isYouTube) artistId else artistName?.let { resolveYouTubeArtistId(it) }
+        val remote = youTubeId?.let { id ->
+            try {
+                kotlinx.coroutines.withTimeout(10_000) { getYouTubeArtistContent(id) }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                if (e is kotlinx.coroutines.TimeoutCancellationException) null else throw e
+            } catch (e: Exception) {
+                if (isYouTube && local == null) throw e
+                null
+            }
+        }
+        when {
+            remote == null -> local ?: error("Couldn't load this artist")
+            local == null -> remote
+            else -> mergeArtistContent(local, remote)
+        }
+    }
+
+    private val youTubeArtistIds = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    /** The YouTube Music artist with exactly this name, if there is one. */
+    private suspend fun resolveYouTubeArtistId(name: String): String? {
+        val key = name.lowercase()
+        youTubeArtistIds[key]?.let { return it }
+        val found = try {
+            app.youTubeInnertubeClient.searchArtists(name, 5).firstOrNull { it.name.equals(name, ignoreCase = true) }?.artistId
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
+        } ?: return null
+        youTubeArtistIds[key] = found
+        return found
+    }
+
+    private fun mergeArtistContent(local: ArtistContent, remote: ArtistContent): ArtistContent {
+        fun norm(s: String) = s.lowercase().replace(Regex("[^a-z0-9]"), "")
+        val localAlbums = local.albums.toMutableList()
+        fun onPhone(yt: AlbumUiModel): AlbumUiModel {
+            val i = localAlbums.indexOfFirst { norm(it.title) == norm(yt.title) }
+            if (i < 0) return yt
+            val mine = localAlbums.removeAt(i)
+            return mine.copy(releaseYear = mine.releaseYear ?: yt.releaseYear)
+        }
+        val albums = remote.albums.map(::onPhone)
+        val singles = remote.singles.map(::onPhone)
+        val localSongs = local.songs.toMutableList()
+        val songs = remote.songs.map { yt ->
+            val i = localSongs.indexOfFirst { norm(it.title) == norm(yt.title) }
+            if (i < 0) yt else localSongs.removeAt(i)
+        } + localSongs
+        return ArtistContent(songs = songs, albums = albums + localAlbums, singles = singles)
+    }
+
+    private suspend fun getLibraryArtistContent(artistId: String): ArtistContent = withContext(Dispatchers.IO) {
             val songs = songDao.getByArtistKey(artistId)
             ArtistContent(
                 songs = songs.map { it.toUiModel() },

@@ -299,7 +299,8 @@ private fun MonoMusicTopAppBarActions(
                 expanded = menuOpen,
                 onDismissRequest = { menuOpen = false },
             ) {
-                listOf(Screen.Downloads, Screen.Radio, Screen.Settings).forEachIndexed { i, page ->
+                // Radio off (owner, 2026-10-08)
+                listOf(Screen.Downloads, Screen.Settings).forEachIndexed { i, page ->
                     if (i > 0) DashedDivider(thickness = 1.dp)
                     DropdownMenuItemMMD(
                         text = { TextMMD(page.label) },

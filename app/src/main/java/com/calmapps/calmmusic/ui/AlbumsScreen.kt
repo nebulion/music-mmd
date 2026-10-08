@@ -1,5 +1,8 @@
 package com.calmapps.calmmusic.ui
 
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.outlined.Cloud
 import com.calmapps.calmmusic.ui.kit.ListRow
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -126,9 +129,22 @@ fun AlbumItem(
         .joinToString(" • ")
     ListRow(
         title = album.title,
-        subtitle = subtitle.ifEmpty { null },
+        subtitle = subtitle.ifEmpty { album.sourceType.takeIf { it == "YOUTUBE" }?.let { "YouTube Music" } },
         bold = true,
         showDivider = showDivider,
         modifier = Modifier.clickable(onClick = onClick),
+        // as on song rows: a cloud marks what isn't on the phone
+        subtitleLeading = if (album.sourceType == "YOUTUBE") {
+            {
+                androidx.compose.material3.Icon(
+                    androidx.compose.material.icons.Icons.Outlined.Cloud,
+                    contentDescription = "Not downloaded",
+                    modifier = Modifier.size(16.dp),
+                )
+                androidx.compose.foundation.layout.Spacer(Modifier.width(6.dp))
+            }
+        } else {
+            null
+        },
     )
 }

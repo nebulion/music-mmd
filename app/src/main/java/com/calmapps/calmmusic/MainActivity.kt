@@ -427,7 +427,7 @@ fun MonoMusic(app: MonoMusic) {
     )
 
     fun openArtist(name: String, id: String, before: () -> Unit = {}) = openWhenReady(
-        load = { if (viewModel.cachedArtistContent(id) == null) viewModel.loadArtistContent(id) },
+        load = { if (viewModel.cachedArtistContent(id) == null) viewModel.loadArtistContent(id, name) },
         open = {
             before()
             selectedArtist = name
@@ -1350,6 +1350,7 @@ fun MonoMusic(app: MonoMusic) {
  chrome(Screen.ArtistDetails.route) {
                     ArtistDetailsScreen(
                         artistId = selectedArtistId ?: libraryArtists.find { it.name == selectedArtist }?.id,
+                        artistName = selectedArtist,
                         viewModel = viewModel,
                         onPlaySongClick = { song, songs ->
                             val index = songs.indexOfFirst { it.id == song.id }

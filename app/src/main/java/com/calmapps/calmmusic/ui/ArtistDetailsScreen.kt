@@ -37,6 +37,7 @@ import com.mudita.mmd.components.text.TextMMD
 @Composable
 fun ArtistDetailsScreen(
     artistId: String?,
+    artistName: String? = null,
     viewModel: MonoMusicViewModel,
     onPlaySongClick: (SongUiModel, List<SongUiModel>) -> Unit,
     onAlbumClick: (AlbumUiModel) -> Unit,
@@ -77,7 +78,7 @@ fun ArtistDetailsScreen(
         }
         try {
             // a quiet refresh: the page only changes if the content did
-            val content = viewModel.loadArtistContent(artistId)
+            val content = viewModel.loadArtistContent(artistId, artistName)
             if (content.songs != songs) songs = content.songs
             if (content.albums != albums) albums = content.albums
             if (content.singles != singles) singles = content.singles
