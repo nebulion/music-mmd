@@ -14,7 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.mudita.mmd.components.buttons.FloatingActionButtonMMD
-import com.mudita.mmd.components.lazy.LazyColumnMMD
+import com.calmapps.calmmusic.ui.kit.PagedList
 import com.mudita.mmd.components.text.TextMMD
 
 data class SongUiModel(
@@ -98,7 +98,7 @@ fun SongsScreen(
             }
 
             else -> {
-                LazyColumnMMD(contentPadding = PaddingValues(16.dp)) {
+                PagedList(contentPadding = PaddingValues(horizontal = 16.dp)) {
                     items(
                         items = songs,
                         key = { it.id },

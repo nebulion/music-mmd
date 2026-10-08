@@ -1,5 +1,6 @@
 package com.calmapps.calmmusic.ui
 
+import com.calmapps.calmmusic.ui.kit.ListRow
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,7 +19,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mudita.mmd.components.divider.HorizontalDividerMMD
-import com.mudita.mmd.components.lazy.LazyColumnMMD
+import com.calmapps.calmmusic.ui.kit.PagedList
 import com.mudita.mmd.components.text.TextMMD
 
 /** Simple UI model for distinct artists in the library. */
@@ -92,7 +93,7 @@ fun ArtistsScreen(
 
             else -> {
                 val lastArtistId = artists.lastOrNull()?.id
-                LazyColumnMMD(contentPadding = PaddingValues(16.dp)) {
+                PagedList(contentPadding = PaddingValues(horizontal = 16.dp)) {
                     items(
                         items = artists,
                         key = { it.id },
@@ -116,37 +117,12 @@ fun ArtistItem(
     onClick: () -> Unit,
     showDivider: Boolean = true,
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(bottom = 8.dp),
-    ) {
-        TextMMD(
-            text = artist.name,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-
-        val songLabel = if (artist.songCount == 1) "1 song" else "${artist.songCount} songs"
-        val albumLabel = if (artist.albumCount == 1) "1 album" else "${artist.albumCount} albums"
-        val subtitle = "$songLabel • $albumLabel"
-
-        Spacer(modifier = Modifier.height(4.dp))
-        TextMMD(
-            text = subtitle,
-            fontSize = 16.sp,
-            fontWeight = FontWeight.Normal,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        if (showDivider) {
-            DashedDivider(thickness = 1.dp)
-        }
-    }
+    val songLabel = if (artist.songCount == 1) "1 song" else "${artist.songCount} songs"
+    val albumLabel = if (artist.albumCount == 1) "1 album" else "${artist.albumCount} albums"
+    ListRow(
+        title = artist.name,
+        subtitle = "$songLabel • $albumLabel",
+        showDivider = showDivider,
+        modifier = Modifier.clickable(onClick = onClick),
+    )
 }

@@ -27,6 +27,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -37,7 +39,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.Player
 import androidx.media3.ui.PlayerView
-import com.mudita.mmd.components.progress_indicator.CircularProgressIndicatorMMD
+import androidx.compose.material.icons.outlined.Downloading
 import com.mudita.mmd.components.slider.SliderMMD
 
 enum class RepeatMode {
@@ -76,6 +78,8 @@ fun NowPlayingScreen(
     isInLibrary: Boolean = false,
     sourceType: String? = null,
     streamResolverLabel: String? = null,
+    /** Opens the artist's page; null when the artist isn't known (no link shown). */
+    onArtistClick: (() -> Unit)? = null,
 ) {
     Column(
         modifier = Modifier
@@ -105,7 +109,7 @@ fun NowPlayingScreen(
 
             Text(
                 text = "Now Playing",
-                fontSize = 18.sp,
+                style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Bold,
             )
         }
@@ -132,10 +136,13 @@ fun NowPlayingScreen(
 
                 Text(
                     text = artist,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    // underlined when it opens the artist's page (no colour on E Ink)
+                    textDecoration = if (onArtistClick != null) androidx.compose.ui.text.style.TextDecoration.Underline else null,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = if (onArtistClick != null) Modifier.clickable(onClick = onArtistClick) else Modifier,
                 )
 
                 val hasAlbum = !album.isNullOrBlank()
@@ -144,7 +151,7 @@ fun NowPlayingScreen(
 
                     Text(
                         text = album!!,
-                        fontSize = 20.sp,
+                        style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Medium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -198,12 +205,12 @@ fun NowPlayingScreen(
             ) {
                 Text(
                     text = formatDurationMillisNonNull(currentPosition),
-                    fontSize = 14.sp,
+                    style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
                     text = formatDurationMillisNonNull(duration),
-                    fontSize = 14.sp,
+                    style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.SemiBold,
                 )
             }
@@ -229,22 +236,16 @@ fun NowPlayingScreen(
                 )
             }
 
-            if (isLoading) {
-                CircularProgressIndicatorMMD(
-                    modifier = Modifier.size(56.dp),
-                    color = MaterialTheme.colorScheme.primary
+            // No spinner (E Ink): the button stays put; "Loading" shows under the controls instead.
+            IconButton(
+                onClick = onPlayPauseClick,
+                modifier = Modifier.size(72.dp)
+            ) {
+                Icon(
+                    imageVector = if (isPlaying) Icons.Outlined.Pause else Icons.Outlined.PlayArrow,
+                    contentDescription = if (isPlaying) "Pause" else "Play",
+                    modifier = Modifier.size(46.dp),
                 )
-            } else {
-                IconButton(
-                    onClick = onPlayPauseClick,
-                    modifier = Modifier.size(72.dp)
-                ) {
-                    Icon(
-                        imageVector = if (isPlaying) Icons.Outlined.Pause else Icons.Outlined.PlayArrow,
-                        contentDescription = if (isPlaying) "Pause" else "Play",
-                        modifier = Modifier.size(46.dp),
-                    )
-                }
             }
 
             IconButton(
@@ -259,7 +260,7 @@ fun NowPlayingScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        DelayedLoadingLine(visible = isLoading)
 
         // Bottom row for secondary actions (e.g. shuffle, repeat, add to playlist / library)
         Row(
@@ -278,9 +279,9 @@ fun NowPlayingScreen(
             if (canDownload) {
                 if (isDownloadInProgress) {
                     IconButton(onClick = onCancelDownloadClick) {
-                        CircularProgressIndicatorMMD(
-                            modifier = Modifier.size(24.dp),
-                            color = MaterialTheme.colorScheme.primary,
+                        Icon(
+                            imageVector = Icons.Outlined.Downloading,
+                            contentDescription = "Downloading. Tap to cancel",
                         )
                     }
                 } else {
@@ -371,7 +372,7 @@ fun NowPlayingScreen(
 //                            Spacer(modifier = Modifier.width(6.dp))
 //                            Text(
 //                                text = streamResolverLabel,
-//                                fontSize = 12.sp,
+//                                style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
 //                                color = MaterialTheme.colorScheme.surface,
 //                                maxLines = 1,
 //                                overflow = TextOverflow.Ellipsis,
@@ -431,4 +432,28 @@ private fun NowPlayingScreenPreview() {
         sourceType = "YOUTUBE",
         streamResolverLabel = "Innertube/Piped",
     )
+}
+
+/**
+ * "Loading" under the controls while a song buffers: nothing for the first half second (most
+ * starts are quicker), then static text. The line's height is always reserved, so nothing moves.
+ */
+@Composable
+private fun DelayedLoadingLine(visible: Boolean) {
+    var show by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(visible) {
+        show = false
+        if (visible) {
+            kotlinx.coroutines.delay(500)
+            show = true
+        }
+    }
+    Box(Modifier.fillMaxWidth().height(32.dp), contentAlignment = Alignment.Center) {
+        if (show) {
+            com.mudita.mmd.components.text.TextMMD(
+                text = "Loading",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+    }
 }

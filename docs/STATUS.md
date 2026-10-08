@@ -31,7 +31,7 @@ Read next: [ARCHITECTURE.md](ARCHITECTURE.md).
 | 2 | The app remembers the last search / album / artist | Done, **device check owed** |
 | 3 | Artist search, artist pages with Albums and Singles | Done, **device check owed** |
 | 4 | Wireframes (owner picks) | Done: 1A 2B 3A 4C |
-| 5 | Kompakt treatment (MMD kit, paging, type, no motion) | — |
+| 5 | Kompakt treatment (MMD kit, paging, type, no motion) | Done, **device check owed** |
 | 6 | Speed (R8, profiles, one paint) | — |
 
 ### Phase 1 — what changed
@@ -76,6 +76,33 @@ same album page, and Back returns to the same search results.
 
 **Device check owed:** search "radiohead" → Artists → Radiohead → Albums lists all studio albums (15) →
 OK Computer plays; Singles tab shows singles and EPs.
+
+### Phase 5 — what changed
+- Toolchain now matches Fit and Macros: AGP 9.4, Kotlin 2.4.10, Compose BOM 2026.08, **MMD 1.0.2**, Gradle 9.7.1.
+- Kit copied from Macros into `ui/kit/`: `MmdTheme` (system font, white surfaces), `MmdTokens`, `EinkRefresh`
+  (flash every 12 taps, on), `PagedList`, `Rows`, `DashedDividerMMD`; new `ListRow` (fixed 76/64 dp rows,
+  label Black 21 / supporting Medium 18) and `EinkSettings`.
+- Every list pages instead of scrolling (`PagedList`, one paint per screen). Scrollbar shows only when a list
+  runs past a page (MMD rule 1, as Anki and Fit; Macros has none — one rule for all apps is still open).
+- Every font size is from MMD's scale (no ad-hoc sizes, nothing under 14 sp).
+- **1A:** the playing strip (title · artist · play/pause) sits above the tabs on every screen; the pill is gone.
+- **2B:** search tabs Songs · Albums · Artists; library matches lead Songs, marked ✓.
+- **3A:** artist page shuffle is in the top bar, not a floating button.
+- **4C:** Now Playing slider unchanged. Its spinners are gone: "Loading" appears under the controls after
+  0.5 s; downloading shows a static icon (tap to cancel).
+- Tapping the artist name on Now Playing (underlined when known) opens the artist page.
+- Settings gets an **E Ink** tab: flash on/off and every 6/8/12/16/24 taps.
+- External-player card and download bars are MMD (white card, black outline, static bar).
+
+**Not done in Phase 5 (owner's call or later):**
+- `MainActivity.kt` was not split into files: it is one composable sharing ~60 state variables, and splitting
+  it is a refactor with no visible change. Worth doing before the next feature.
+- Song rows still open their menu on long-press (MMD P6 says long-press is not a menu trigger; the owner's
+  pattern is hold = select). Options: a ⋮ per row, or actions on Now Playing only.
+- Search "more results" (continuation pages).
+
+**Device check owed:** rows equal height and paging by the last row; the playing strip; flash every 12 taps;
+Settings → E Ink.
 
 ## Owner's decisions
 - 2026-10-07: fork MonoMusic only; CalmMusic compared and not used.

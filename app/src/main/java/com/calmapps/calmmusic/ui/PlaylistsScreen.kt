@@ -22,7 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mudita.mmd.components.buttons.OutlinedButtonMMD
 import com.mudita.mmd.components.buttons.FloatingActionButtonMMD
-import com.mudita.mmd.components.lazy.LazyColumnMMD
+import com.calmapps.calmmusic.ui.kit.PagedList
 import com.mudita.mmd.components.text.TextMMD
 
 data class PlaylistUiModel(
@@ -64,7 +64,7 @@ fun PlaylistsScreen(
                 ) {
                     TextMMD(
                         text = "No playlists in your library yet",
-                        fontSize = 22.sp,
+                        style = androidx.compose.material3.MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.SemiBold,
                     )
                     Spacer(modifier = Modifier.height(16.dp))
@@ -77,7 +77,7 @@ fun PlaylistsScreen(
             }
         } else {
             val lastPlaylistId = playlists.lastOrNull()?.id
-            LazyColumnMMD(contentPadding = PaddingValues(16.dp)) {
+            PagedList(contentPadding = PaddingValues(horizontal = 16.dp)) {
                 items(
                     items = playlists,
                     key = { it.id },

@@ -21,6 +21,9 @@ import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.outlined.Headphones
 import androidx.compose.material.icons.outlined.LibraryAddCheck
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import com.calmapps.calmmusic.ui.kit.DashedDividerMMD
+import com.calmapps.calmmusic.ui.kit.ListRow
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -52,6 +55,8 @@ fun SongItem(
     isDownloaded: Boolean = false,
     showDivider: Boolean = true,
     isInLibrary: Boolean = false,
+    /** Show the ✓ for library songs even when they are local files (search results). */
+    markInLibrary: Boolean = false,
 ) {
     val (isLocal, subtitle) = remember(
         song.id,
@@ -106,147 +111,90 @@ fun SongItem(
 
     var showMenu by remember { mutableStateOf(false) }
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .combinedClickable(
+    Box {
+        ListRow(
+            title = song.title,
+            subtitle = subtitle.ifBlank { null },
+            showDivider = showDivider,
+            modifier = Modifier.combinedClickable(
                 onClick = onClick,
-                onLongClick = { showMenu = true }
-            )
-            .padding(bottom = 8.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
+                onLongClick = { showMenu = true },
+            ),
+            // album pages reserve the number column on every row, so labels line up
+            leading = if (showTrackNumber) {
+                {
+                    if (isCurrentlyPlaying) {
+                        Icon(Icons.Outlined.Headphones, contentDescription = "Now playing", modifier = Modifier.size(24.dp))
+                    } else {
+                        TextMMD(
+                            text = song.trackNumber?.toString().orEmpty(),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                        )
+                    }
+                }
+            } else {
+                null
+            },
+            subtitleLeading = {
+                if (!isLocal) {
+                    Icon(Icons.Outlined.Cloud, contentDescription = "Streaming", modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                }
+                if (isInLibrary && (!isLocal || markInLibrary)) {
+                    Icon(Icons.Outlined.LibraryAddCheck, contentDescription = "In library", modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                }
+            },
+            trailing = if (isCurrentlyPlaying && !showTrackNumber) {
+                { Icon(Icons.Outlined.Headphones, contentDescription = "Now playing", modifier = Modifier.size(24.dp)) }
+            } else {
+                null
+            },
+        )
+
+        DropdownMenuMMD(
+            expanded = showMenu,
+            onDismissRequest = { showMenu = false },
         ) {
-            if (isCurrentlyPlaying) {
-                Icon(
-                    imageVector = Icons.Outlined.Headphones,
-                    contentDescription = "Now playing",
-                    modifier = Modifier
-                        .size(24.dp)
-                        .padding(start = 4.dp),
-                )
-            } else if (song.trackNumber != null && showTrackNumber) {
-                TextMMD(
-                    text = song.trackNumber.toString(),
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.width(28.dp),
-                    textAlign = TextAlign.Center
+            DropdownMenuItemMMD(
+                text = { TextMMD(text = "Add to playlist") },
+                onClick = {
+                    showMenu = false
+                    onAddToPlaylist()
+                },
+            )
+            if (isLocal && onEdit != null) {
+                DashedDividerMMD()
+                DropdownMenuItemMMD(
+                    text = { TextMMD(text = "Edit") },
+                    onClick = {
+                        showMenu = false
+                        onEdit()
+                    },
                 )
             }
-
-            Column(
-                modifier = Modifier.weight(1f),
-            ) {
-                TextMMD(
-                    text = song.title,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+            if (isInLibrary && !isLocal && !isDownloaded) {
+                DashedDividerMMD()
+                DropdownMenuItemMMD(
+                    text = { TextMMD(text = "Remove from library") },
+                    onClick = {
+                        showMenu = false
+                        onRemoveFromLibrary()
+                    },
                 )
-                Spacer(modifier = Modifier.height(4.dp))
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    if (!isLocal) {
-                        Icon(
-                            imageVector = Icons.Outlined.Cloud,
-                            contentDescription = "Streaming source",
-                            modifier = Modifier
-                                .size(16.dp)
-                        )
-
-                        Spacer(modifier = Modifier.width(8.dp))
-                    }
-
-                    if (!isLocal && isInLibrary) {
-                        Icon(
-                            imageVector = Icons.Outlined.LibraryAddCheck,
-                            contentDescription = "In Library",
-                            modifier = Modifier.size(16.dp)
-                        )
-
-                        Spacer(modifier = Modifier.width(8.dp))
-                    }
-
-                    TextMMD(
-                        text = subtitle,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Normal,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
             }
-
-            if (showMenu) {
-                Box(modifier = Modifier.wrapContentSize()) {
-                    Icon(
-                        imageVector = Icons.Outlined.Clear,
-                        contentDescription = "Close menu",
-                        modifier = Modifier
-                            .size(24.dp)
-                            .clickable { showMenu = false }
-                    )
-
-                    DropdownMenuMMD(
-                        expanded = true,
-                        onDismissRequest = { showMenu = false }
-                    ) {
-                        DropdownMenuItemMMD(
-                            text = { TextMMD(text = "Add to playlist") },
-                            onClick = {
-                                showMenu = false
-                                onAddToPlaylist()
-                            }
-                        )
-
-                        if (isLocal && onEdit != null) {
-                            DashedDivider(thickness = 1.dp)
-                            DropdownMenuItemMMD(
-                                text = { TextMMD(text = "Edit") },
-                                onClick = {
-                                    showMenu = false
-                                    onEdit()
-                                }
-                            )
-                        }
-
-                        if (isDownloaded || isLocal) {
-                            DashedDivider(thickness = 1.dp)
-                            DropdownMenuItemMMD(
-                                text = { TextMMD(text = "Delete") },
-                                onClick = {
-                                    showMenu = false
-                                    onDelete()
-                                }
-                            )
-                        }
-
-                        if (isInLibrary && !isLocal && !isDownloaded) {
-                            DashedDivider(thickness = 1.dp)
-                            DropdownMenuItemMMD(
-                                text = { TextMMD(text = "Remove from library") },
-                                onClick = {
-                                    showMenu = false
-                                    onRemoveFromLibrary()
-                                }
-                            )
-                        }
-                    }
-                }
+            // destructive last (MMD Menus)
+            if (isDownloaded || isLocal) {
+                DashedDividerMMD()
+                DropdownMenuItemMMD(
+                    text = { TextMMD(text = "Delete") },
+                    onClick = {
+                        showMenu = false
+                        onDelete()
+                    },
+                )
             }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        if (showDivider) {
-            DashedDivider(thickness = 1.dp)
         }
     }
 }
@@ -275,39 +223,13 @@ fun PlaylistItem(
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(bottom = 8.dp),
-    ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            TextMMD(
-                text = playlist.name,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-
-            if (subtitle.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(4.dp))
-                TextMMD(
-                    text = subtitle,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Normal,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        if (showDivider) {
-            DashedDivider(thickness = 1.dp)
-        }
-    }
+    ListRow(
+        title = playlist.name,
+        subtitle = subtitle.ifEmpty { null },
+        bold = true,
+        showDivider = showDivider,
+        modifier = Modifier.clickable(onClick = onClick),
+    )
 }
 
 @Composable
@@ -339,54 +261,12 @@ fun SelectablePlaylistItem(
         onSelectionChange(!isSelected)
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = toggle)
-            .padding(bottom = 8.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            CheckboxMMD(
-                checked = isSelected,
-                onCheckedChange = { checked ->
-                    onSelectionChange(checked)
-                },
-                modifier = Modifier.padding(0.dp),
-            )
-
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(start = 12.dp),
-            ) {
-                TextMMD(
-                    text = playlist.name,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-
-                if (subtitle.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    TextMMD(
-                        text = subtitle,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Normal,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        if (showDivider) {
-            DashedDivider(thickness = 1.dp)
-        }
-    }
+    ListRow(
+        title = playlist.name,
+        subtitle = subtitle.ifEmpty { null },
+        bold = true,
+        showDivider = showDivider,
+        modifier = Modifier.clickable(onClick = toggle),
+        leading = { CheckboxMMD(checked = isSelected, onCheckedChange = null) },
+    )
 }

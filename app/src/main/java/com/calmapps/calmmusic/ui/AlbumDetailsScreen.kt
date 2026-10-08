@@ -24,7 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.calmapps.calmmusic.MonoMusicViewModel
 import com.mudita.mmd.components.buttons.FloatingActionButtonMMD
-import com.mudita.mmd.components.lazy.LazyColumnMMD
+import com.calmapps.calmmusic.ui.kit.PagedList
 import com.mudita.mmd.components.tabs.PrimaryTabRowMMD
 import com.mudita.mmd.components.tabs.TabMMD
 import com.mudita.mmd.components.text.TextMMD
@@ -115,7 +115,7 @@ fun AlbumDetailsScreen(
                                     text = {
                                         TextMMD(
                                             text = "Disc $disc",
-                                            fontSize = 16.sp,
+                                            style = androidx.compose.material3.MaterialTheme.typography.titleSmall,
                                             fontWeight = if (selectedDiscIndex == index) FontWeight.Bold else FontWeight.Normal,
                                         )
                                     },
@@ -131,7 +131,7 @@ fun AlbumDetailsScreen(
                         songs
                     }
 
-                    LazyColumnMMD(contentPadding = PaddingValues(16.dp)) {
+                    PagedList(contentPadding = PaddingValues(horizontal = 16.dp)) {
                         items(displaySongs.size) { index ->
                             val song = displaySongs[index]
                             SongItem(

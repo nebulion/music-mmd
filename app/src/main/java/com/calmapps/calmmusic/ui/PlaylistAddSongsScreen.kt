@@ -25,7 +25,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mudita.mmd.components.checkbox.CheckboxMMD
-import com.mudita.mmd.components.lazy.LazyColumnMMD
+import com.calmapps.calmmusic.ui.kit.PagedList
 import com.mudita.mmd.components.text.TextMMD
 
 @Composable
@@ -51,9 +51,9 @@ fun PlaylistAddSongsScreen(
                 TextMMD(text = "No songs available to add")
             }
         } else {
-            LazyColumnMMD(
+            PagedList(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(16.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp),
             ) {
                 items(songs.size) { index ->
                     val song = songs[index]
@@ -109,7 +109,7 @@ private fun SelectableSongItem(
             ) {
                 TextMMD(
                     text = song.title,
-                    fontSize = 20.sp,
+                    style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -141,7 +141,7 @@ private fun SelectableSongItem(
                 }
                 TextMMD(
                     text = subtitle,
-                    fontSize = 16.sp,
+                    style = androidx.compose.material3.MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Normal,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,

@@ -51,7 +51,7 @@ fun PermissionsOnboardingScreen(
             ) {
                 TextMMD(
                     text = "Welcome to MonoMusic",
-                    fontSize = 32.sp,
+                    style = androidx.compose.material3.MaterialTheme.typography.headlineLarge,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth(),
@@ -63,7 +63,7 @@ fun PermissionsOnboardingScreen(
                     text = "Downloaded songs are saved to Music/MonoMusic on your SD card or phone " +
                             "storage. Reading songs added there by other apps or a computer " +
                             "requires the audio permission.",
-                    fontSize = 16.sp,
+                    style = androidx.compose.material3.MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Normal,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth(),
@@ -88,7 +88,7 @@ fun PermissionsOnboardingScreen(
                         } else {
                             "Allow access to your music"
                         },
-                        fontSize = 18.sp,
+                        style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Bold,
                         textAlign = TextAlign.Center,
                     )
@@ -104,7 +104,7 @@ fun PermissionsOnboardingScreen(
                     ) {
                         TextMMD(
                             text = "Continue",
-                            fontSize = 18.sp,
+                            style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Bold,
                         )
                     }
@@ -114,7 +114,7 @@ fun PermissionsOnboardingScreen(
 
                 TextMMD(
                     text = "Skip for now",
-                    fontSize = 18.sp,
+                    style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
                     modifier = Modifier
                         .padding(top = 4.dp, bottom = 4.dp)
                         .clickable(onClick = onSkipClick),

@@ -38,7 +38,7 @@ import com.calmapps.calmmusic.PlaylistsViewModel
 import com.mudita.mmd.components.buttons.OutlinedButtonMMD
 import com.mudita.mmd.components.buttons.FloatingActionButtonMMD
 import com.mudita.mmd.components.checkbox.CheckboxMMD
-import com.mudita.mmd.components.lazy.LazyColumnMMD
+import com.calmapps.calmmusic.ui.kit.PagedList
 import com.mudita.mmd.components.text.TextMMD
 import kotlinx.coroutines.launch
 
@@ -144,7 +144,7 @@ fun PlaylistDetailsScreen(
                     ) {
                         TextMMD(
                             text = "No songs in this playlist",
-                            fontSize = 22.sp,
+                            style = androidx.compose.material3.MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.SemiBold,
                         )
                         Spacer(modifier = Modifier.height(16.dp))
@@ -158,7 +158,7 @@ fun PlaylistDetailsScreen(
             }
 
             else -> {
-                LazyColumnMMD(contentPadding = PaddingValues(16.dp)) {
+                PagedList(contentPadding = PaddingValues(horizontal = 16.dp)) {
                     items(songs.size) { index ->
                         val song = songs[index]
                         val isLast = song == songs.lastOrNull()
@@ -270,7 +270,7 @@ private fun EditablePlaylistSongItem(
             ) {
                 TextMMD(
                     text = song.title,
-                    fontSize = 20.sp,
+                    style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -292,7 +292,7 @@ private fun EditablePlaylistSongItem(
                 if (subtitle.isNotEmpty()) {
                     TextMMD(
                         text = subtitle,
-                        fontSize = 16.sp,
+                        style = androidx.compose.material3.MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Normal,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,

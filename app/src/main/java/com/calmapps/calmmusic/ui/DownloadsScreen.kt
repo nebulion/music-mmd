@@ -24,7 +24,7 @@ import androidx.compose.ui.unit.sp
 import com.calmapps.calmmusic.YouTubeDownloadStatus
 import com.mudita.mmd.components.buttons.OutlinedButtonMMD
 import com.mudita.mmd.components.divider.HorizontalDividerMMD
-import com.mudita.mmd.components.lazy.LazyColumnMMD
+import com.calmapps.calmmusic.ui.kit.PagedList
 import com.mudita.mmd.components.text.TextMMD
 
 @Composable
@@ -45,7 +45,7 @@ fun DownloadsScreen(
             )
         }
     } else {
-        LazyColumnMMD(contentPadding = PaddingValues(16.dp)) {
+        PagedList(contentPadding = PaddingValues(horizontal = 16.dp)) {
             items(downloads.size) { index ->
                 val status = downloads[index]
                 DownloadItem(
@@ -74,13 +74,13 @@ private fun DownloadItem(
             Column(modifier = Modifier.weight(1f)) {
                 TextMMD(
                     text = status.title,
-                    fontSize = 16.sp,
+                    style = androidx.compose.material3.MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                 )
                 TextMMD(
                     text = status.artist,
-                    fontSize = 14.sp,
+                    style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                 )
@@ -100,29 +100,27 @@ private fun DownloadItem(
 
         when (status.state) {
             YouTubeDownloadStatus.State.PENDING -> {
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                Spacer(modifier = Modifier.height(4.dp))
-                TextMMD(text = "Pending...", fontSize = 12.sp)
+                TextMMD(text = "Waiting", style = androidx.compose.material3.MaterialTheme.typography.labelSmall)
             }
             YouTubeDownloadStatus.State.IN_PROGRESS -> {
-                LinearProgressIndicator(
+                com.mudita.mmd.components.progress_indicator.LinearProgressIndicatorMMD(
                     progress = { status.progress },
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Spacer(modifier = Modifier.height(4.dp))
-                TextMMD(text = "${(status.progress * 100).toInt()}%", fontSize = 12.sp)
+                TextMMD(text = "${(status.progress * 100).toInt()}%", style = androidx.compose.material3.MaterialTheme.typography.labelSmall)
             }
             YouTubeDownloadStatus.State.COMPLETED -> {
-                TextMMD(text = "Completed", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+                TextMMD(text = "Completed", style = androidx.compose.material3.MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
             }
             YouTubeDownloadStatus.State.FAILED -> {
-                TextMMD(text = "Failed: ${status.errorMessage ?: "Unknown error"}", fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
+                TextMMD(text = "Failed: ${status.errorMessage ?: "Unknown error"}", style = androidx.compose.material3.MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
             }
             YouTubeDownloadStatus.State.CANCELED -> {
-                TextMMD(text = "Canceled", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                TextMMD(text = "Canceled", style = androidx.compose.material3.MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             YouTubeDownloadStatus.State.SKIPPED -> {
-                TextMMD(text = "Already downloaded", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                TextMMD(text = "Already downloaded", style = androidx.compose.material3.MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
 

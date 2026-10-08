@@ -149,7 +149,7 @@ fun PermissionSheetContent(
     ) {
         TextMMD(
             text = title,
-            fontSize = 24.sp,
+            style = androidx.compose.material3.MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold
         )
 
@@ -157,7 +157,7 @@ fun PermissionSheetContent(
 
         TextMMD(
             text = description,
-            fontSize = 16.sp,
+            style = androidx.compose.material3.MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.onSurface
         )
 
@@ -168,7 +168,7 @@ fun PermissionSheetContent(
             contentPadding = PaddingValues(12.dp),
             onClick = onConfirm
         ) {
-            TextMMD(buttonText, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            TextMMD(buttonText, style = androidx.compose.material3.MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
         }
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -178,7 +178,7 @@ fun PermissionSheetContent(
             contentPadding = PaddingValues(12.dp),
             onClick = onCancel
         ) {
-            TextMMD("Cancel", fontSize = 18.sp, fontWeight = FontWeight.Medium)
+            TextMMD("Cancel", style = androidx.compose.material3.MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
         }
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -227,9 +227,9 @@ fun EmptyRadioState(onPowerOn: () -> Unit) {
             )
         }
         Spacer(modifier = Modifier.height(24.dp))
-        TextMMD("Turn on FM Radio", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        TextMMD("Turn on FM Radio", style = androidx.compose.material3.MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(8.dp))
-        TextMMD("Tap to launch tuner", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+        TextMMD("Tap to launch tuner", style = androidx.compose.material3.MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
     }
 }
 
@@ -287,7 +287,7 @@ fun ActiveRadioState(
             } else if (!mediaState.title.contains("FM Radio", ignoreCase = true)) {
                 Spacer(modifier = Modifier.height(8.dp))
                 if (!mediaState.title.matches(Regex(".*\\d{2,3}.*"))) {
-                    TextMMD(mediaState.title, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                    TextMMD(mediaState.title, style = androidx.compose.material3.MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
                 }
             }
         }
@@ -303,7 +303,7 @@ fun ActiveRadioState(
                 Spacer(modifier = Modifier.width(8.dp))
                 TextMMD(
                     text = systemFrequency?.let { DecimalFormat("0.0").format(it) } ?: "Unknown",
-                    fontSize = 44.sp,
+                    style = androidx.compose.material3.MaterialTheme.typography.headlineLarge,
                     fontWeight = FontWeight.ExtraBold,
                     color = if(isScanning) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                 )
@@ -335,7 +335,7 @@ fun ActiveRadioState(
                     tint = MaterialTheme.colorScheme.onErrorContainer
                 )
             }
-            TextMMD("Turn Off FM Radio", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            TextMMD("Turn Off FM Radio", style = androidx.compose.material3.MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
         }
     }
 }

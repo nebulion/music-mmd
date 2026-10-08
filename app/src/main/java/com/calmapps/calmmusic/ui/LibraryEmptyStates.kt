@@ -33,7 +33,7 @@ fun LibraryOnboardingEmptyState(
     ) {
         TextMMD(
             text = title,
-            fontSize = 24.sp,
+            style = androidx.compose.material3.MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth(),
@@ -43,7 +43,7 @@ fun LibraryOnboardingEmptyState(
 
         TextMMD(
             text = body,
-            fontSize = 18.sp,
+            style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth(),
         )
@@ -57,7 +57,7 @@ fun LibraryOnboardingEmptyState(
         ) {
             TextMMD(
                 text = "Set up streaming",
-                fontSize = 24.sp,
+                style = androidx.compose.material3.MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
             )
         }
@@ -71,7 +71,7 @@ fun LibraryOnboardingEmptyState(
         ) {
             TextMMD(
                 text = "Set up local",
-                fontSize = 24.sp,
+                style = androidx.compose.material3.MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
             )
         }

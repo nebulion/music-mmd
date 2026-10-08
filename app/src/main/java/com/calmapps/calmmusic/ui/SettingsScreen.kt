@@ -26,7 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mudita.mmd.components.buttons.OutlinedButtonMMD
 import com.mudita.mmd.components.divider.HorizontalDividerMMD
-import com.mudita.mmd.components.lazy.LazyColumnMMD
+import com.calmapps.calmmusic.ui.kit.PagedList
 import com.mudita.mmd.components.slider.SliderMMD
 import com.mudita.mmd.components.switcher.SwitchMMD
 import com.mudita.mmd.components.tabs.PrimaryTabRowMMD
@@ -55,8 +55,8 @@ fun SettingsScreen(
     localScanIndexedNewOrUpdated: Int?,
     localScanDeletedMissing: Int?,
 ) {
-    // 0 = Streaming, 1 = Local
-    val tabOptions = listOf("Streaming", "Local")
+    // 0 = Streaming, 1 = Local, 2 = E Ink
+    val tabOptions = listOf("Streaming", "Local", "E Ink")
 
     Column(
         modifier = Modifier
@@ -70,7 +70,7 @@ fun SettingsScreen(
                     text = {
                         TextMMD(
                             text = title,
-                            fontSize = 16.sp,
+                            style = androidx.compose.material3.MaterialTheme.typography.titleSmall,
                             fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal,
                         )
                     },
@@ -78,8 +78,10 @@ fun SettingsScreen(
             }
         }
 
-        if (selectedTab == 0) {
-            LazyColumnMMD(
+        if (selectedTab == 2) {
+            com.calmapps.calmmusic.ui.kit.EinkSettings()
+        } else if (selectedTab == 0) {
+            PagedList(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(start = 16.dp, top = 16.dp, bottom = 16.dp),
@@ -89,7 +91,7 @@ fun SettingsScreen(
 
                     TextMMD(
                         text = "Library features",
-                        fontSize = 16.sp,
+                        style = androidx.compose.material3.MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
                     )
 
@@ -118,7 +120,7 @@ fun SettingsScreen(
                             ) {
                                 TextMMD(
                                     text = "Complete albums with YouTube",
-                                    fontSize = 14.sp,
+                                    style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.SemiBold
                                 )
 
@@ -126,7 +128,7 @@ fun SettingsScreen(
 
                                 TextMMD(
                                     text = "When viewing a local album, search YouTube for missing songs and display them in the list.",
-                                    fontSize = 12.sp,
+                                    style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
@@ -142,7 +144,7 @@ fun SettingsScreen(
                 }
             }
         } else if (selectedTab == 1) {
-            LazyColumnMMD(
+            PagedList(
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.Top,
             ) {
@@ -155,7 +157,7 @@ fun SettingsScreen(
                     ) {
                         TextMMD(
                             text = "Include local music",
-                            fontSize = 16.sp,
+                            style = androidx.compose.material3.MaterialTheme.typography.titleSmall,
                             modifier = Modifier.weight(1f),
                         )
                         SwitchMMD(
@@ -176,7 +178,7 @@ fun SettingsScreen(
                         ) {
                             TextMMD(
                                 text = "Local music folders",
-                                fontSize = 16.sp,
+                                style = androidx.compose.material3.MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.SemiBold,
                             )
 
@@ -184,7 +186,7 @@ fun SettingsScreen(
 
                             TextMMD(
                                 text = "Choose one or more folders to scan for audio files.",
-                                fontSize = 14.sp,
+                                style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
                             )
 
                             HorizontalDividerMMD(
@@ -208,7 +210,7 @@ fun SettingsScreen(
                             ) {
                                 TextMMD(
                                     text = "Add folder",
-                                    fontSize = 16.sp,
+                                    style = androidx.compose.material3.MaterialTheme.typography.titleSmall,
                                 )
                             }
 
@@ -220,7 +222,7 @@ fun SettingsScreen(
                                 ) {
                                     TextMMD(
                                         text = "Rescan",
-                                        fontSize = 16.sp,
+                                        style = androidx.compose.material3.MaterialTheme.typography.titleSmall,
                                     )
                                 }
                             }
@@ -257,13 +259,13 @@ fun SettingsScreen(
                                     Column(modifier = Modifier.fillMaxWidth()) {
                                         TextMMD(
                                             text = "Step 1 of 2 – Scanning folders for audio files… $percent%",
-                                            fontSize = 14.sp,
+                                            style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
                                         )
                                         if (localScanTotalDiscovered != null && localScanSkippedUnchanged != null && localScanIndexedNewOrUpdated != null) {
                                             Spacer(modifier = Modifier.height(4.dp))
                                             TextMMD(
                                                 text = "Found $localScanTotalDiscovered files · Skipped $localScanSkippedUnchanged unchanged · Indexed $localScanIndexedNewOrUpdated new/updated",
-                                                fontSize = 13.sp,
+                                                style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
                                             )
                                         }
                                     }
@@ -302,13 +304,13 @@ fun SettingsScreen(
                                     Column(modifier = Modifier.fillMaxWidth()) {
                                         TextMMD(
                                             text = "Step 2 of 2 – Adding music to library… $ingestPercent%",
-                                            fontSize = 14.sp,
+                                            style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
                                         )
                                         if (localScanDeletedMissing != null && localScanDeletedMissing > 0) {
                                             Spacer(modifier = Modifier.height(4.dp))
                                             TextMMD(
                                                 text = "Removed ${localScanDeletedMissing} files that are no longer present",
-                                                fontSize = 13.sp,
+                                                style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
                                             )
                                         }
                                     }
@@ -331,7 +333,7 @@ fun SettingsScreen(
                             ) {
                                 TextMMD(
                                     text = "Last scan",
-                                    fontSize = 14.sp,
+                                    style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.SemiBold,
                                 )
 
@@ -339,14 +341,14 @@ fun SettingsScreen(
 
                                 TextMMD(
                                     text = "Found $localScanTotalDiscovered files · Skipped $localScanSkippedUnchanged unchanged · Indexed $localScanIndexedNewOrUpdated new/updated",
-                                    fontSize = 13.sp,
+                                    style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
                                 )
 
                                 if (localScanDeletedMissing != null && localScanDeletedMissing > 0) {
                                     Spacer(modifier = Modifier.height(2.dp))
                                     TextMMD(
                                         text = "Removed ${localScanDeletedMissing} files that are no longer present",
-                                        fontSize = 13.sp,
+                                        style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
                                     )
                                 }
                             }
@@ -362,7 +364,7 @@ fun SettingsScreen(
                             ) {
                                 TextMMD(
                                     text = "No folders selected yet.",
-                                    fontSize = 14.sp,
+                                    style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
                                 )
                             }
                         }
@@ -376,7 +378,7 @@ fun SettingsScreen(
                             ) {
                                 TextMMD(
                                     text = formatDirectoryPath(folder),
-                                    fontSize = 14.sp,
+                                    style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
                                     modifier = Modifier.weight(1f),
                                 )
                                 IconButton(onClick = { onRemoveFolderClick(folder) }) {

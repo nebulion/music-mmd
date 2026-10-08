@@ -1,5 +1,17 @@
 package com.calmapps.calmmusic
 
+import com.mudita.mmd.components.divider.HorizontalDividerMMD
+import androidx.compose.ui.Alignment
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material.icons.outlined.Shuffle
+import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.material.icons.outlined.Pause
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -58,7 +70,7 @@ fun MonoMusicTopAppBar(
     isPlaylistDetailsMenuExpanded: Boolean,
     canDownloadSelectedAlbum: Boolean,
     canRenameSelectedAlbum: Boolean,
-    hasNowPlaying: Boolean,
+    onArtistShuffleClick: (() -> Unit)?,
     onBackClick: () -> Unit,
     onCancelPlaylistsEditClick: () -> Unit,
     onCancelPlaylistDetailsEditClick: () -> Unit,
@@ -74,7 +86,6 @@ fun MonoMusicTopAppBar(
     onShowDeletePlaylistSongsConfirmationClick: () -> Unit,
     onShowDeletePlaylistsConfirmationClick: () -> Unit,
     onPlaylistAddSongsDoneClick: () -> Unit,
-    onNowPlayingClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val navRoutes = remember { navItems.map { it.route } }
@@ -146,7 +157,7 @@ fun MonoMusicTopAppBar(
                     androidx.compose.foundation.layout.Column {
                         Text(
                             text = selectedAlbum.title,
-                            fontSize = 18.sp,
+                            style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Bold,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
@@ -155,7 +166,7 @@ fun MonoMusicTopAppBar(
                         if (!artist.isNullOrBlank()) {
                             Text(
                                 text = artist,
-                                fontSize = 14.sp,
+                                style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Medium,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
@@ -167,7 +178,7 @@ fun MonoMusicTopAppBar(
                 currentDestination?.route == Screen.ArtistDetails.route && selectedArtistName != null -> {
                     Text(
                         text = selectedArtistName,
-                        fontSize = 20.sp,
+                        style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -177,7 +188,7 @@ fun MonoMusicTopAppBar(
                 currentDestination?.route == Screen.PlaylistDetails.route && selectedPlaylist != null -> {
                     Text(
                         text = selectedPlaylist.name,
-                        fontSize = 20.sp,
+                        style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -187,7 +198,7 @@ fun MonoMusicTopAppBar(
                 else -> {
                     Text(
                         text = getAppBarTitle(currentDestination),
-                        fontSize = 24.sp,
+                        style = androidx.compose.material3.MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
                     )
@@ -205,7 +216,7 @@ fun MonoMusicTopAppBar(
                 canDownloadSelectedAlbum = canDownloadSelectedAlbum,
                 canRenameSelectedAlbum = canRenameSelectedAlbum,
                 hasLibraryPlaylists = selectedPlaylist != null,
-                hasNowPlaying = hasNowPlaying,
+                onArtistShuffleClick = onArtistShuffleClick,
                 onEnterPlaylistsEditClick = onEnterPlaylistsEditClick,
                 onNavigateToSearchClick = onNavigateToSearchClick,
                 onPlaylistDetailsMenuToggle = onPlaylistDetailsMenuToggle,
@@ -218,7 +229,6 @@ fun MonoMusicTopAppBar(
                 onShowDeletePlaylistSongsConfirmationClick = onShowDeletePlaylistSongsConfirmationClick,
                 onShowDeletePlaylistsConfirmationClick = onShowDeletePlaylistsConfirmationClick,
                 onPlaylistAddSongsDoneClick = onPlaylistAddSongsDoneClick,
-                onNowPlayingClick = onNowPlayingClick,
             )
         },
         showDivider = false,
@@ -237,7 +247,7 @@ private fun MonoMusicTopAppBarActions(
     canDownloadSelectedAlbum: Boolean,
     canRenameSelectedAlbum: Boolean,
     hasLibraryPlaylists: Boolean,
-    hasNowPlaying: Boolean,
+    onArtistShuffleClick: (() -> Unit)?,
     onEnterPlaylistsEditClick: () -> Unit,
     onNavigateToSearchClick: () -> Unit,
     onPlaylistDetailsMenuToggle: () -> Unit,
@@ -250,7 +260,6 @@ private fun MonoMusicTopAppBarActions(
     onShowDeletePlaylistSongsConfirmationClick: () -> Unit,
     onShowDeletePlaylistsConfirmationClick: () -> Unit,
     onPlaylistAddSongsDoneClick: () -> Unit,
-    onNowPlayingClick: () -> Unit,
 ) {
     val navRoutes = remember { navItems.map { it.route } }
 
@@ -345,7 +354,7 @@ private fun MonoMusicTopAppBarActions(
             TextMMD(
                 text = "Delete $playlistEditSelectionCount",
                 textAlign = TextAlign.Center,
-                fontSize = 14.sp,
+                style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.SemiBold,
             )
         }
@@ -360,30 +369,68 @@ private fun MonoMusicTopAppBarActions(
             TextMMD(
                 text = "Done",
                 textAlign = TextAlign.Center,
-                fontSize = 14.sp,
+                style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.SemiBold,
             )
         }
     }
 
-    if (
-        hasNowPlaying &&
-        currentDestination?.route != Screen.PlaylistAddSongs.route &&
-        currentDestination?.route != Screen.Radio.route &&
-        !(currentDestination?.route == Screen.Playlists.route && isPlaylistsEditMode) &&
-        !(currentDestination?.route == Screen.PlaylistDetails.route && isPlaylistDetailsEditMode)
-    ) {
-        OutlinedButtonMMD(
-            onClick = onNowPlayingClick,
-            contentPadding = PaddingValues(8.dp),
-            modifier = Modifier.padding(horizontal = 8.dp),
-        ) {
-            TextMMD(
-                text = "Now Playing",
-                textAlign = TextAlign.Center,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
+    if (currentDestination?.route == Screen.ArtistDetails.route && onArtistShuffleClick != null) {
+        IconButton(onClick = onArtistShuffleClick) {
+            Icon(
+                imageVector = Icons.Outlined.Shuffle,
+                contentDescription = "Shuffle artist songs",
             )
+        }
+    }
+}
+
+/**
+ * What's playing, one line above the tabs (owner's pick 1A): title, artist and play/pause; tap the
+ * strip for Now Playing. It changes only when the song or play state does, never with the position.
+ */
+@Composable
+fun PlayingStrip(
+    title: String,
+    artist: String,
+    isPlaying: Boolean,
+    onOpen: () -> Unit,
+    onPlayPause: () -> Unit,
+) {
+    Column(Modifier.fillMaxWidth()) {
+        HorizontalDividerMMD(thickness = 3.dp)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(64.dp)
+                .clickable(onClick = onOpen)
+                .padding(start = 16.dp, end = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                TextMMD(
+                    text = title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Black,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (artist.isNotBlank()) {
+                    TextMMD(
+                        text = artist,
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            IconButton(onClick = onPlayPause, modifier = Modifier.size(48.dp)) {
+                Icon(
+                    imageVector = if (isPlaying) Icons.Outlined.Pause else Icons.Outlined.PlayArrow,
+                    contentDescription = if (isPlaying) "Pause" else "Play",
+                    modifier = Modifier.size(28.dp),
+                )
+            }
         }
     }
 }
@@ -392,8 +439,25 @@ private fun MonoMusicTopAppBarActions(
 fun MonoMusicBottomBar(
     currentDestination: NavDestination?,
     onNavigate: (String) -> Unit,
+    playingTitle: String?,
+    playingArtist: String,
+    isPlaying: Boolean,
+    onOpenNowPlaying: () -> Unit,
+    onPlayPause: () -> Unit,
 ) {
     val navRoutes = remember { navItems.map { it.route } }
+    val route = currentDestination?.route
+
+    Column {
+    if (playingTitle != null && route != Screen.Radio.route && route != Screen.PlaylistAddSongs.route) {
+        PlayingStrip(
+            title = playingTitle,
+            artist = playingArtist,
+            isPlaying = isPlaying,
+            onOpen = onOpenNowPlaying,
+            onPlayPause = onPlayPause,
+        )
+    }
 
     if (currentDestination?.route in navRoutes) {
         NavigationBarMMD(
@@ -412,7 +476,9 @@ fun MonoMusicBottomBar(
                     label = {
                         TextMMD(
                             text = screen.label,
+                            style = MaterialTheme.typography.labelMedium,
                             fontWeight = if (isSelected) FontWeight.Black else FontWeight.Medium,
+                            maxLines = 1,
                         )
                     },
                     selected = isSelected,
@@ -420,5 +486,6 @@ fun MonoMusicBottomBar(
                 )
             }
         }
+    }
     }
 }

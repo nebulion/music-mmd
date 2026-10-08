@@ -1,5 +1,6 @@
 package com.calmapps.calmmusic.ui
 
+import com.calmapps.calmmusic.ui.kit.ListRow
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,7 +17,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.mudita.mmd.components.lazy.LazyColumnMMD
+import com.calmapps.calmmusic.ui.kit.PagedList
 import com.mudita.mmd.components.tabs.PrimaryTabRowMMD
 import com.mudita.mmd.components.tabs.TabMMD
 import com.mudita.mmd.components.text.TextMMD
@@ -28,9 +29,9 @@ data class ArtistResultUiModel(
     val subtitle: String?,
 )
 
-private val SEARCH_TABS = listOf("Songs", "Albums", "Artists", "Local")
+// Owner's pick 2B: three tabs; library matches lead the Songs tab instead of a Local tab.
+private val SEARCH_TABS = listOf("Songs", "Albums", "Artists")
 const val SEARCH_TAB_ARTISTS = 2
-const val SEARCH_TAB_LOCAL = 3
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,7 +51,7 @@ fun SearchScreen(
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
-                PrimaryTabRowMMD(selectedTabIndex = selectedTab) {
+                PrimaryTabRowMMD(selectedTabIndex = selectedTab.coerceIn(0, SEARCH_TABS.lastIndex)) {
                     SEARCH_TABS.forEachIndexed { index, title ->
                         TabMMD(
                             selected = selectedTab == index,
@@ -58,7 +59,7 @@ fun SearchScreen(
                             text = {
                                 TextMMD(
                                     text = title,
-                                    fontSize = 16.sp,
+                                    style = androidx.compose.material3.MaterialTheme.typography.titleSmall,
                                     fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal,
                                     maxLines = 1,
                                 )
@@ -67,7 +68,7 @@ fun SearchScreen(
                     }
                 }
 
-                LazyColumnMMD(contentPadding = PaddingValues(16.dp)) {
+                PagedList(contentPadding = PaddingValues(horizontal = 16.dp)) {
                     if (isSearching) {
                         item {
                             TextMMD(text = "Searching...")
@@ -84,15 +85,19 @@ fun SearchScreen(
 
                     when (selectedTab) {
                         0 -> {
-                            if (songs.isNotEmpty()) {
-                                items(songs.size) { index ->
-                                    val song = songs[index]
+                            // your own songs first, marked ✓; then YouTube's, without repeats
+                            val localIds = localSongs.mapTo(HashSet()) { it.id }
+                            val combined = localSongs + songs.filter { it.id !in localIds }
+                            if (combined.isNotEmpty()) {
+                                items(combined.size) { index ->
+                                    val song = combined[index]
                                     SongItem(
                                         song = song,
                                         isCurrentlyPlaying = false,
                                         onClick = { onPlaySongClick(song) },
-                                        showDivider = song != songs.lastOrNull(),
-                                        isInLibrary = librarySongIds.contains(song.id),
+                                        showDivider = index != combined.lastIndex,
+                                        isInLibrary = song.id in localIds || librarySongIds.contains(song.id),
+                                        markInLibrary = true,
                                     )
                                 }
                             }
@@ -100,7 +105,7 @@ fun SearchScreen(
                             if (
                                 !isSearching &&
                                 errorMessage == null &&
-                                songs.isEmpty()
+                                combined.isEmpty()
                             ) {
                                 item {
                                     TextMMD(text = "No songs. Try a different search.")
@@ -150,26 +155,6 @@ fun SearchScreen(
                             }
                         }
 
-                        SEARCH_TAB_LOCAL -> {
-                            if (localSongs.isNotEmpty()) {
-                                items(localSongs.size) { index ->
-                                    val song = localSongs[index]
-                                    SongItem(
-                                        song = song,
-                                        isCurrentlyPlaying = false,
-                                        onClick = { onPlaySongClick(song) },
-                                        showDivider = song != localSongs.lastOrNull(),
-                                        isInLibrary = true,
-                                    )
-                                }
-                            }
-
-                            if (!isSearching && localSongs.isEmpty()) {
-                                item {
-                                    TextMMD(text = "No local songs found.")
-                                }
-                            }
-                        }
                     }
                 }
             }
@@ -182,31 +167,11 @@ private fun ArtistResultItem(
     onClick: () -> Unit,
     showDivider: Boolean,
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(bottom = 8.dp),
-    ) {
-        TextMMD(
-            text = artist.name,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        if (!artist.subtitle.isNullOrBlank()) {
-            Spacer(modifier = Modifier.height(4.dp))
-            TextMMD(
-                text = artist.subtitle,
-                fontSize = 16.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        if (showDivider) {
-            Spacer(modifier = Modifier.height(8.dp))
-            DashedDivider()
-        }
-    }
+    ListRow(
+        title = artist.name,
+        subtitle = artist.subtitle,
+        bold = true,
+        showDivider = showDivider,
+        modifier = Modifier.clickable(onClick = onClick),
+    )
 }

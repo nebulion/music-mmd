@@ -28,7 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.calmapps.calmmusic.MonoMusicViewModel
 import com.mudita.mmd.components.buttons.FloatingActionButtonMMD
-import com.mudita.mmd.components.lazy.LazyColumnMMD
+import com.calmapps.calmmusic.ui.kit.PagedList
 import com.mudita.mmd.components.tabs.PrimaryTabRowMMD
 import com.mudita.mmd.components.tabs.TabMMD
 import com.mudita.mmd.components.text.TextMMD
@@ -40,7 +40,8 @@ fun ArtistDetailsScreen(
     viewModel: MonoMusicViewModel,
     onPlaySongClick: (SongUiModel, List<SongUiModel>) -> Unit,
     onAlbumClick: (AlbumUiModel) -> Unit,
-    onShuffleSongsClick: (List<SongUiModel>) -> Unit,
+    /** The songs shuffle would play, or null when there are none (leaving the page clears it). */
+    onShuffleAvailable: (List<SongUiModel>?) -> Unit,
     onAddToPlaylistClick: (SongUiModel) -> Unit,
     onRemoveFromLibraryClick: (SongUiModel) -> Unit,
     onDeleteClick: (SongUiModel) -> Unit,
@@ -60,6 +61,10 @@ fun ArtistDetailsScreen(
     val currentSongId = playbackState.currentSongId
 
     val refreshTrigger by viewModel.libraryRefreshTrigger.collectAsState()
+
+    val shownSongs = if (!isLoading && errorMessage == null && songs.isNotEmpty()) songs else null
+    LaunchedEffect(shownSongs) { onShuffleAvailable(shownSongs) }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { onShuffleAvailable(null) } }
 
     LaunchedEffect(artistId, refreshTrigger) {
         if (artistId == null) {
@@ -125,7 +130,7 @@ fun ArtistDetailsScreen(
                                 text = {
                                     TextMMD(
                                         text = title,
-                                        fontSize = 16.sp,
+                                        style = androidx.compose.material3.MaterialTheme.typography.titleSmall,
                                         fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal,
                                     )
                                 },
@@ -136,8 +141,8 @@ fun ArtistDetailsScreen(
                     if (selectedTab < songsTab) {
                         // Albums or Singles tab
                         val shown = if (selectedTab == 0) albums else singles
-                        LazyColumnMMD(
-                            contentPadding = PaddingValues(16.dp),
+                        PagedList(
+                            contentPadding = PaddingValues(horizontal = 16.dp),
                             verticalArrangement = Arrangement.Top,
                         ) {
                             if (shown.isNotEmpty()) {
@@ -163,8 +168,8 @@ fun ArtistDetailsScreen(
                         }
                     } else {
                         // Songs tab
-                        LazyColumnMMD(
-                            contentPadding = PaddingValues(16.dp),
+                        PagedList(
+                            contentPadding = PaddingValues(horizontal = 16.dp),
                             verticalArrangement = Arrangement.Top,
                         ) {
                             if (songs.isNotEmpty()) {
@@ -197,18 +202,6 @@ fun ArtistDetailsScreen(
             }
         }
 
-        if (!isLoading && errorMessage == null && songs.isNotEmpty()) {
-            FloatingActionButtonMMD(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(16.dp),
-                onClick = { onShuffleSongsClick(songs) },
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Shuffle,
-                    contentDescription = "Shuffle artist songs",
-                )
-            }
-        }
+
     }
 }

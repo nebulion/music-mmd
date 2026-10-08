@@ -93,7 +93,6 @@ import com.calmapps.calmmusic.ui.MoreScreen
 import com.calmapps.calmmusic.ui.NowPlayingScreen
 import com.calmapps.calmmusic.ui.PermissionsOnboardingScreen
 import com.calmapps.calmmusic.ui.ArtistResultUiModel
-import com.calmapps.calmmusic.ui.SEARCH_TAB_LOCAL
 import com.calmapps.calmmusic.ui.PlaylistAddSongsScreen
 import com.calmapps.calmmusic.ui.PlaylistDetailsScreen
 import com.calmapps.calmmusic.ui.PlaylistEditScreen
@@ -105,14 +104,14 @@ import com.calmapps.calmmusic.ui.SearchScreen
 import com.calmapps.calmmusic.ui.SettingsScreen
 import com.calmapps.calmmusic.ui.SongUiModel
 import com.calmapps.calmmusic.ui.SongsScreen
-import com.mudita.mmd.ThemeMMD
+import com.calmapps.calmmusic.ui.kit.MmdTheme
 import com.mudita.mmd.components.bottom_sheet.ModalBottomSheetMMD
 import com.mudita.mmd.components.text_field.TextFieldMMD
 import com.mudita.mmd.components.bottom_sheet.SheetStateMMD
 import com.mudita.mmd.components.bottom_sheet.rememberModalBottomSheetMMDState
 import com.mudita.mmd.components.buttons.OutlinedButtonMMD
 import com.mudita.mmd.components.divider.HorizontalDividerMMD
-import com.mudita.mmd.components.lazy.LazyColumnMMD
+import com.calmapps.calmmusic.ui.kit.PagedList
 import com.mudita.mmd.components.snackbar.SnackbarDurationMMD
 import com.mudita.mmd.components.snackbar.SnackbarHostMMD
 import com.mudita.mmd.components.snackbar.SnackbarHostStateMMD
@@ -140,7 +139,7 @@ class MainActivity : ComponentActivity() {
             }
         }
         setContent {
-            ThemeMMD {
+            MmdTheme {
                 MonoMusic(app)
             }
         }
@@ -312,6 +311,9 @@ fun MonoMusic(app: MonoMusic) {
     val currentSongId = playbackState.currentSongId
     val nowPlayingSong = playbackState.nowPlayingSong
     var isPlaybackPlaying = playbackState.isPlaybackPlaying
+
+    // The artist page's shuffle, shown in the top bar (owner's pick 3A) once its songs are loaded.
+    var artistShuffle by remember { mutableStateOf<(() -> Unit)?>(null) }
 
     var showNowPlaying by remember { mutableStateOf(savedUi.showNowPlaying) }
     var showAddToPlaylistDialog by remember { mutableStateOf(false) }
@@ -912,7 +914,7 @@ fun MonoMusic(app: MonoMusic) {
                         canDownloadSelectedAlbum = selectedAlbum?.sourceType == "YOUTUBE",
                         canRenameSelectedAlbum = selectedAlbum?.sourceType == "LOCAL_FILE" ||
                                 selectedAlbum?.sourceType == "YOUTUBE_DOWNLOAD",
-                        hasNowPlaying = nowPlayingSong != null,
+                        onArtistShuffleClick = artistShuffle,
                         onBackClick = { navController.navigateUp() },
                         onCancelPlaylistsEditClick = {
                             isPlaylistsEditMode = false
@@ -1065,13 +1067,17 @@ fun MonoMusic(app: MonoMusic) {
                                 }
                             }
                         },
-                        onNowPlayingClick = { showNowPlaying = true },
                     )
                     HorizontalDividerMMD(thickness = 3.dp)
                 }
             },
             bottomBar = {
                 MonoMusicBottomBar(
+                    playingTitle = nowPlayingSong?.title,
+                    playingArtist = nowPlayingSong?.artist.orEmpty(),
+                    isPlaying = isPlaybackPlaying,
+                    onOpenNowPlaying = { showNowPlaying = true },
+                    onPlayPause = { togglePlayback() },
                     currentDestination = currentDestination,
                     onNavigate = { route ->
                         navController.navigate(route) {
@@ -1170,7 +1176,7 @@ fun MonoMusic(app: MonoMusic) {
                         selectedTab = searchSelectedTab,
                         onSelectedTabChange = { searchSelectedTab = it },
                         onPlaySongClick = { song: SongUiModel ->
-                            if (searchSelectedTab == SEARCH_TAB_LOCAL) {
+                            if (searchLocalSongs.any { it.id == song.id }) {
                                 val index = searchLocalSongs.indexOfFirst { it.id == song.id }
                                 val startIndex = if (index >= 0) index else 0
                                 startPlaybackFromQueue(searchLocalSongs, startIndex)
@@ -1231,8 +1237,8 @@ fun MonoMusic(app: MonoMusic) {
                             selectedAlbum = album
                             navController.navigate(Screen.AlbumDetails.route) { launchSingleTop = true }
                         },
-                        onShuffleSongsClick = { songs ->
-                            startShuffledPlaybackFromQueue(songs)
+                        onShuffleAvailable = { songs ->
+                            artistShuffle = songs?.let { { startShuffledPlaybackFromQueue(it) } }
                         },
                         onAddToPlaylistClick = onAddToPlaylist,
                         onRemoveFromLibraryClick = onRemoveFromLibrary,
@@ -1371,7 +1377,18 @@ fun MonoMusic(app: MonoMusic) {
                 showNowPlaying = false
             }
 
+            // YouTube songs carry their artist's id; library songs match a library artist by name.
+            val artistTarget = song.artistId
+                ?: libraryArtists.firstOrNull { it.name.equals(song.artist, ignoreCase = true) }?.id
             NowPlayingScreen(
+                onArtistClick = artistTarget?.let { id ->
+                    {
+                        showNowPlaying = false
+                        selectedArtist = song.artist
+                        selectedArtistId = id
+                        navController.navigate(Screen.ArtistDetails.route) { launchSingleTop = true }
+                    }
+                },
                 title = song.title,
                 artist = song.artist.ifBlank { if (song.sourceType == "LOCAL_FILE" || song.sourceType == "YOUTUBE_DOWNLOAD") "Local file" else "" },
                 album = song.album,
@@ -1486,7 +1503,7 @@ fun MonoMusic(app: MonoMusic) {
                     ) {
                         TextMMD(
                             text = "Add to Playlist",
-                            fontSize = 24.sp,
+                            style = androidx.compose.material3.MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                         )
 
@@ -1506,14 +1523,14 @@ fun MonoMusic(app: MonoMusic) {
                     if (libraryPlaylists.isEmpty()) {
                         Text(
                             text = "You have not created any playlist yet...",
-                            fontSize = 16.sp,
+                            style = androidx.compose.material3.MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Normal
                         )
 
                         Spacer(modifier = Modifier.height(8.dp))
                     } else {
                         val lastPlaylistId = libraryPlaylists.lastOrNull()?.id
-                        LazyColumnMMD(
+                        PagedList(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .heightIn(max = screenHeight * 0.6f),
@@ -1553,7 +1570,7 @@ fun MonoMusic(app: MonoMusic) {
                     ) {
                         TextMMD(
                             text = "New playlist",
-                            fontSize = 24.sp,
+                            style = androidx.compose.material3.MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                         )
                     }
@@ -1581,7 +1598,7 @@ fun MonoMusic(app: MonoMusic) {
                     ) {
                         TextMMD(
                             text = "Edit Album",
-                            fontSize = 24.sp,
+                            style = androidx.compose.material3.MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                         )
 
@@ -1652,7 +1669,7 @@ fun MonoMusic(app: MonoMusic) {
                     ) {
                         TextMMD(
                             text = "Save",
-                            fontSize = 24.sp,
+                            style = androidx.compose.material3.MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                         )
                     }
@@ -1680,7 +1697,7 @@ fun MonoMusic(app: MonoMusic) {
                     ) {
                         TextMMD(
                             text = "Edit Song",
-                            fontSize = 24.sp,
+                            style = androidx.compose.material3.MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                         )
 
@@ -1750,7 +1767,7 @@ fun MonoMusic(app: MonoMusic) {
                     ) {
                         TextMMD(
                             text = "Save",
-                            fontSize = 24.sp,
+                            style = androidx.compose.material3.MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                         )
                     }
@@ -1783,7 +1800,7 @@ fun MonoMusic(app: MonoMusic) {
                                 } else {
                                     "Remove songs from \"${playlist.name}\""
                                 },
-                                fontSize = 24.sp,
+                                style = androidx.compose.material3.MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold,
                             )
 
@@ -1806,7 +1823,7 @@ fun MonoMusic(app: MonoMusic) {
                             } else {
                                 "This will remove the selected songs from this playlist. The songs will remain in your library."
                             },
-                            fontSize = 16.sp,
+                            style = androidx.compose.material3.MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Normal,
                         )
 
@@ -1859,7 +1876,7 @@ fun MonoMusic(app: MonoMusic) {
                         ) {
                             TextMMD(
                                 text = "Remove",
-                                fontSize = 24.sp,
+                                style = androidx.compose.material3.MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold,
                             )
                         }
@@ -1873,7 +1890,7 @@ fun MonoMusic(app: MonoMusic) {
                         ) {
                             TextMMD(
                                 text = "Back",
-                                fontSize = 24.sp,
+                                style = androidx.compose.material3.MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Medium,
                             )
                         }
@@ -1900,7 +1917,7 @@ fun MonoMusic(app: MonoMusic) {
                         ) {
                             TextMMD(
                                 text = "Delete playlist${if (playlistEditSelectionCount > 1) "s" else ""}",
-                                fontSize = 24.sp,
+                                style = androidx.compose.material3.MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold,
                             )
 
@@ -1923,7 +1940,7 @@ fun MonoMusic(app: MonoMusic) {
                             } else {
                                 "This will permanently remove the selected playlists. Songs in your library will not be deleted."
                             },
-                            fontSize = 16.sp,
+                            style = androidx.compose.material3.MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Normal,
                         )
 
@@ -1985,7 +2002,7 @@ fun MonoMusic(app: MonoMusic) {
                         ) {
                             TextMMD(
                                 text = "Delete",
-                                fontSize = 24.sp,
+                                style = androidx.compose.material3.MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold,
                             )
                         }
@@ -1999,7 +2016,7 @@ fun MonoMusic(app: MonoMusic) {
                         ) {
                             TextMMD(
                                 text = "Back",
-                                fontSize = 24.sp,
+                                style = androidx.compose.material3.MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Medium,
                             )
                         }
@@ -2035,34 +2052,34 @@ fun ExternalMediaWidget(state: ExternalMediaState) {
                 modifier = Modifier.fillMaxWidth(),
                 contentPadding = PaddingValues(8.dp)
             ) {
-                TextMMD("Tap to Enable Music Control", fontSize = 14.sp)
+                TextMMD("Tap to Enable Music Control", style = androidx.compose.material3.MaterialTheme.typography.labelSmall)
             }
         }
     } else {
-        Card(
+        // MMD card: white with a black outline; no grey fill, no faded text, one solid button.
+        com.mudita.mmd.components.cards.CardMMD(
             modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            colors = com.mudita.mmd.components.cards.CardDefaultsMMD.cardColors(containerColor = androidx.compose.ui.graphics.Color.White),
         ) {
             Column(
                 modifier = Modifier.padding(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "Playing on ${state.packageName}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                    )
-                }
+                TextMMD(
+                    text = "Playing on ${state.packageName}",
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
                 Spacer(modifier = Modifier.height(4.dp))
-                Text(
+                TextMMD(
                     text = state.title,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Text(
+                TextMMD(
                     text = state.artist,
                     style = MaterialTheme.typography.bodyMedium,
                     maxLines = 1,
@@ -2074,13 +2091,11 @@ fun ExternalMediaWidget(state: ExternalMediaState) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(onClick = { ExternalMediaRepository.skipToPrevious() }) {
-                        Icon(Icons.Default.SkipPrevious, "Prev")
+                        Icon(Icons.Default.SkipPrevious, "Previous")
                     }
-
-                    androidx.compose.material3.FilledIconButton(onClick = { ExternalMediaRepository.togglePlayPause() }) {
-                        Icon(if(state.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, "Play")
+                    IconButton(onClick = { ExternalMediaRepository.togglePlayPause() }) {
+                        Icon(if (state.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, if (state.isPlaying) "Pause" else "Play")
                     }
-
                     IconButton(onClick = { ExternalMediaRepository.skipToNext() }) {
                         Icon(Icons.Default.SkipNext, "Next")
                     }

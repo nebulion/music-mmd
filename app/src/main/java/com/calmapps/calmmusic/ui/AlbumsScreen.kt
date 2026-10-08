@@ -1,5 +1,6 @@
 package com.calmapps.calmmusic.ui
 
+import com.calmapps.calmmusic.ui.kit.ListRow
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,7 +20,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mudita.mmd.components.divider.HorizontalDividerMMD
-import com.mudita.mmd.components.lazy.LazyColumnMMD
+import com.calmapps.calmmusic.ui.kit.PagedList
 import com.mudita.mmd.components.text.TextMMD
 
 /** UI model for displaying albums in the library. */
@@ -97,7 +98,7 @@ fun AlbumsScreen(
 
             else -> {
                 val lastAlbumId = albums.lastOrNull()?.id
-                LazyColumnMMD(contentPadding = PaddingValues(16.dp)) {
+                PagedList(contentPadding = PaddingValues(horizontal = 16.dp)) {
                     items(
                         items = albums,
                         key = { it.id },
@@ -121,48 +122,13 @@ fun AlbumItem(
     onClick: () -> Unit,
     showDivider: Boolean = true,
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(bottom = 8.dp),
-    ) {
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.Center,
-        ) {
-            TextMMD(
-                text = album.title,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (!album.artist.isNullOrBlank() || album.releaseYear != null) {
-                Spacer(modifier = Modifier.height(4.dp))
-                val subtitle = when {
-                    !album.artist.isNullOrBlank() && album.releaseYear != null ->
-                        "${album.artist} • ${album.releaseYear}"
-                    !album.artist.isNullOrBlank() -> album.artist
-                    album.releaseYear != null -> album.releaseYear.toString()
-                    else -> ""
-                }
-                if (subtitle.isNotBlank()) {
-                    TextMMD(
-                        text = subtitle,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Normal,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        if (showDivider) {
-            DashedDivider(thickness = 1.dp)
-        }
-    }
+    val subtitle = listOfNotNull(album.artist?.takeIf { it.isNotBlank() }, album.releaseYear?.toString())
+        .joinToString(" • ")
+    ListRow(
+        title = album.title,
+        subtitle = subtitle.ifEmpty { null },
+        bold = true,
+        showDivider = showDivider,
+        modifier = Modifier.clickable(onClick = onClick),
+    )
 }

@@ -84,6 +84,8 @@ class MonoMusic : Application() {
     override fun onCreate() {
         super.onCreate()
 
+        // Flash the screen black every N taps to clear E Ink ghosting (Settings → E Ink).
+        com.calmapps.calmmusic.ui.kit.EinkRefresh.install(this)
         settingsManager = MonoMusicSettingsManager(this)
         youTubeDownloadManager = YouTubeDownloadManager(
             app = this,
