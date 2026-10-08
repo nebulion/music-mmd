@@ -13,7 +13,7 @@ Read next: [ARCHITECTURE.md](ARCHITECTURE.md).
 | Fork | github.com/nebulion/music-mmd, branch `mmd` (CI: build, unit tests, release APK artifact) |
 | Upstream | `upstream` remote = berendsliedrecht/MonoMusic |
 | Package | `com.musicmmd` (installs beside MonoMusic), app name "Music". Code package is still `com.calmapps.calmmusic` |
-| Build | AGP 8.2, Kotlin 1.9.10, Gradle 8.11.1, compileSdk 35, minSdk 29. Release is debug-signed |
+| Build | AGP 9.4, Kotlin 2.4.10, Compose BOM 2026.08, MMD 1.0.2, Gradle 9.7.1, compileSdk 37, minSdk 29. R8 release, debug-signed |
 | Local compile | `bash tools/gradle-low.sh :app:testDebugUnitTest :app:assembleDebug` (gentle: 4 GB, 2 workers, low priority) |
 
 ## Device routine
@@ -32,7 +32,7 @@ Read next: [ARCHITECTURE.md](ARCHITECTURE.md).
 | 3 | Artist search, artist pages with Albums and Singles | Done, **device check owed** |
 | 4 | Wireframes (owner picks) | Done: 1A 2B 3A 4C |
 | 5 | Kompakt treatment (MMD kit, paging, type, no motion) | Done, **device check owed** |
-| 6 | Speed (R8, profiles, one paint) | — |
+| 6 | Speed (R8, profiles, one paint) | Done, **not measured** |
 
 ### Phase 1 — what changed
 - `PlaybackService`: `setWakeMode(C.WAKE_MODE_NETWORK)` + `WAKE_LOCK` — CPU and Wi-Fi stay awake while playing.
@@ -103,6 +103,15 @@ OK Computer plays; Singles tab shows singles and EPs.
 
 **Device check owed:** rows equal height and paging by the last row; the playing strip; flash every 12 taps;
 Settings → E Ink.
+
+### Phase 6 — what changed
+- Release build: R8 + resource shrinking (APK 8.4 MB), keep rules for NewPipe/Rhino and jaudiotagger in
+  `app/proguard-rules.pro`. Debug-signed, so it installs over itself.
+- `profileinstaller` (compiled on install) and `windowDisablePreview` (no white starting window).
+- Installed on the phone 2026-10-07 and AOT-compiled (`cmd package compile -m speed -f com.musicmmd`). Not opened.
+- Not done: cold start (`am start -W`) and frames per screen change were not measured, because that means
+  opening the app on the phone. No first-draw hold yet. **If streaming fails only in the release build,
+  suspect R8 first** (try the debug APK).
 
 ## Owner's decisions
 - 2026-10-07: fork MonoMusic only; CalmMusic compared and not used.

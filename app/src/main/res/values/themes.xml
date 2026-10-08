@@ -9,5 +9,8 @@
         <!-- Pre-Android-15 (e.g. stock Kompakt): solid white bars. -->
         <item name="android:statusBarColor">@android:color/white</item>
         <item name="android:navigationBarColor">@android:color/white</item>
+        <!-- No starting window: the launcher stays on the panel until the app's first real
+             frame, so opening the app is one E Ink refresh, not a white splash then the app. -->
+        <item name="android:windowDisablePreview">true</item>
     </style>
 </resources>

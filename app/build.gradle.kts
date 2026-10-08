@@ -33,7 +33,9 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // the phone is slow (MT6761): R8 and a non-debuggable build make Compose several times faster
+            isMinifyEnabled = true
+            isShrinkResources = true
             // Debug-signed so the release APK is directly sideloadable
             signingConfig = signingConfigs.getByName("debug")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
@@ -115,5 +117,8 @@ dependencies {
 
     // meta tag library
     implementation("net.jthink:jaudiotagger:3.0.1")
+
+    // Compiles the app ahead of time on install, so a plain `adb install` isn't left interpreted.
+    implementation("androidx.profileinstaller:profileinstaller:1.4.1")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.11.0")
 }
