@@ -1,130 +1,115 @@
 package com.calmapps.calmmusic.ui
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.calmapps.calmmusic.YouTubeDownloadStatus
-import com.mudita.mmd.components.buttons.OutlinedButtonMMD
-import com.mudita.mmd.components.divider.HorizontalDividerMMD
+import com.calmapps.calmmusic.YouTubeDownloadStatus.State
+import com.calmapps.calmmusic.ui.kit.ActionRow
+import com.calmapps.calmmusic.ui.kit.GroupDivider
+import com.calmapps.calmmusic.ui.kit.ListRow
 import com.calmapps.calmmusic.ui.kit.PagedList
+import com.calmapps.calmmusic.ui.kit.SectionTitle
 import com.mudita.mmd.components.text.TextMMD
 
+/** The downloads of one album (or of loose songs), as the Downloads page shows them. */
+private data class AlbumDownloads(
+    val title: String,
+    val artist: String?,
+    val items: List<YouTubeDownloadStatus>,
+) {
+    val active = items.filter { it.state == State.PENDING || it.state == State.IN_PROGRESS }
+    val failed = items.filter { it.state == State.FAILED }
+    val done = items.count { it.state == State.COMPLETED || it.state == State.SKIPPED }
+    val newest = items.maxOf { it.queuedAt }
+}
+
+/**
+ * Downloads by album (owner's pick 2A, 2026-10-08): "Downloading" first, newest first, ✕ cancels the
+ * album's remaining songs; then "Done", newest first, with Clear. Failed songs show on their album
+ * with a retry. Counts move per song, never per second.
+ */
 @Composable
 fun DownloadsScreen(
     downloads: List<YouTubeDownloadStatus>,
     onCancelDownload: (String) -> Unit,
     onClearFinished: () -> Unit,
+    onRetry: (List<String>) -> Unit,
 ) {
-    if (downloads.isEmpty()) {
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-        ) {
-            TextMMD(
-                text = "No recent downloads",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    } else {
-        PagedList(contentPadding = PaddingValues(horizontal = 16.dp)) {
-            items(downloads.size) { index ->
-                val status = downloads[index]
-                DownloadItem(
-                    status = status,
-                    onCancel = { onCancelDownload(status.id) },
-                )
-            }
-        }
+    val groups = remember(downloads) {
+        downloads.filter { it.state != State.CANCELED }
+            .groupBy { (it.album ?: "") to (it.albumArtist ?: it.artist) }
+            .map { (key, items) -> AlbumDownloads(key.first.ifBlank { "Songs" }, key.second, items) }
+            .sortedByDescending { it.newest }
     }
-}
+    val downloading = groups.filter { it.active.isNotEmpty() }
+    val finished = groups.filter { it.active.isEmpty() }
 
-@Composable
-private fun DownloadItem(
-    status: YouTubeDownloadStatus,
-    onCancel: () -> Unit,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(bottom = 16.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                TextMMD(
-                    text = status.title,
-                    style = androidx.compose.material3.MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                )
-                TextMMD(
-                    text = status.artist,
-                    style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                )
-            }
+    if (groups.isEmpty()) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            TextMMD(text = "Nothing downloading", style = MaterialTheme.typography.bodyMedium)
+        }
+        return
+    }
 
-            if (status.state == YouTubeDownloadStatus.State.PENDING || status.state == YouTubeDownloadStatus.State.IN_PROGRESS) {
-                IconButton(onClick = onCancel) {
-                    Icon(
-                        imageVector = Icons.Outlined.Close,
-                        contentDescription = "Cancel",
+    PagedList(modifier = Modifier.fillMaxSize()) {
+        if (downloading.isNotEmpty()) {
+            item { SectionTitle("Downloading") }
+            downloading.forEachIndexed { i, g ->
+                item(key = "a:" + g.title + g.artist) {
+                    val inProgress = g.active.firstOrNull { it.state == State.IN_PROGRESS }
+                    val status = buildString {
+                        append("${g.done} of ${g.items.size}")
+                        if (inProgress != null) append(" · ${inProgress.title}") else append(" · waiting")
+                    }
+                    ListRow(
+                        title = g.title,
+                        subtitle = listOfNotNull(g.artist, status).joinToString(" · "),
+                        showDivider = i != downloading.lastIndex,
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        trailing = {
+                            IconButton(onClick = { g.active.forEach { onCancelDownload(it.id) } }) {
+                                Icon(Icons.Outlined.Close, contentDescription = "Cancel ${g.title}")
+                            }
+                        },
                     )
                 }
             }
         }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        when (status.state) {
-            YouTubeDownloadStatus.State.PENDING -> {
-                TextMMD(text = "Waiting", style = androidx.compose.material3.MaterialTheme.typography.labelSmall)
+        if (finished.isNotEmpty()) {
+            if (downloading.isNotEmpty()) item { GroupDivider() }
+            item { SectionTitle("Done") }
+            finished.forEachIndexed { i, g ->
+                item(key = "d:" + g.title + g.artist) {
+                    val failed = g.failed.size
+                    val summary = when {
+                        failed > 0 -> "$failed failed · tap to retry"
+                        g.done == 1 -> "1 song"
+                        else -> "${g.done} songs"
+                    }
+                    ListRow(
+                        title = g.title,
+                        subtitle = listOfNotNull(g.artist, summary).joinToString(" · "),
+                        showDivider = i != finished.lastIndex,
+                        modifier = Modifier
+                            .then(if (failed > 0) Modifier.clickable { onRetry(g.failed.map { it.id }) } else Modifier)
+                            .padding(horizontal = 16.dp),
+                    )
+                }
             }
-            YouTubeDownloadStatus.State.IN_PROGRESS -> {
-                com.mudita.mmd.components.progress_indicator.LinearProgressIndicatorMMD(
-                    progress = { status.progress },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                TextMMD(text = "${(status.progress * 100).toInt()}%", style = androidx.compose.material3.MaterialTheme.typography.labelSmall)
-            }
-            YouTubeDownloadStatus.State.COMPLETED -> {
-                TextMMD(text = "Completed", style = androidx.compose.material3.MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-            }
-            YouTubeDownloadStatus.State.FAILED -> {
-                TextMMD(text = "Failed: ${status.errorMessage ?: "Unknown error"}", style = androidx.compose.material3.MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
-            }
-            YouTubeDownloadStatus.State.CANCELED -> {
-                TextMMD(text = "Canceled", style = androidx.compose.material3.MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            YouTubeDownloadStatus.State.SKIPPED -> {
-                TextMMD(text = "Already downloaded", style = androidx.compose.material3.MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+            item { GroupDivider() }
+            item { ActionRow(title = "Clear", subtitle = "Remove finished downloads from this list", onClick = onClearFinished) }
         }
-
-        Spacer(modifier = Modifier.height(8.dp))
-        HorizontalDividerMMD()
     }
 }

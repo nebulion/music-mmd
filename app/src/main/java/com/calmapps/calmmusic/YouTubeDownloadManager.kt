@@ -36,6 +36,10 @@ data class YouTubeDownloadStatus(
     val progress: Float,
     val state: State,
     val errorMessage: String? = null,
+    val album: String? = null,
+    val albumArtist: String? = null,
+    /** When it was queued: newest albums first on the Downloads page. */
+    val queuedAt: Long = System.currentTimeMillis(),
 ) {
     enum class State { PENDING, IN_PROGRESS, COMPLETED, FAILED, CANCELED, SKIPPED }
 }
@@ -54,7 +58,7 @@ class YouTubeDownloadManager(
     // Caps parallel downloads so bulk (album) enqueues stay queued as PENDING.
     private val downloadSemaphore = Semaphore(3)
 
-    fun enqueueDownload(song: com.calmapps.calmmusic.ui.SongUiModel, albumArtist: String? = null) {
+    fun enqueueDownload(song: com.calmapps.calmmusic.ui.SongUiModel, albumArtist: String? = null, albumTitle: String? = null) {
         val id = UUID.randomUUID().toString()
         val initial = YouTubeDownloadStatus(
             id = id,
@@ -63,8 +67,11 @@ class YouTubeDownloadManager(
             artist = song.artist,
             progress = 0f,
             state = YouTubeDownloadStatus.State.PENDING,
+            album = albumTitle ?: song.album,
+            albumArtist = albumArtist ?: song.artist,
         )
         _downloads.value = _downloads.value + initial
+        requests[id] = Triple(song, albumArtist, albumTitle)
 
         val job = appScope.launch {
             val context = app.applicationContext
@@ -110,6 +117,16 @@ class YouTubeDownloadManager(
         }
 
         jobsById[id] = job
+    }
+
+    /** What each download was asked for, so a failed one can be tried again. */
+    private val requests = java.util.concurrent.ConcurrentHashMap<String, Triple<com.calmapps.calmmusic.ui.SongUiModel, String?, String?>>()
+
+    /** Queue the failed downloads [ids] again (their old rows go). */
+    fun retry(ids: Collection<String>) {
+        val again = ids.mapNotNull { requests.remove(it) }
+        _downloads.value = _downloads.value.filterNot { it.id in ids }
+        again.forEach { (song, artist, album) -> enqueueDownload(song, artist, album) }
     }
 
     fun cancelDownload(id: String) {

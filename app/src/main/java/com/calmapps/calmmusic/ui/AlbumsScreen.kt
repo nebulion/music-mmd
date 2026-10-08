@@ -34,6 +34,7 @@ data class AlbumUiModel(
     val sourceType: String,
     /** Optional release year for display when available. */
     val releaseYear: Int? = null,
+    val addedAt: Long? = null,
 )
 
 @Composable

@@ -41,9 +41,9 @@ class MonoMusicSettingsManager(context: Context) {
         _includeLocalMusic.value = enabled
     }
 
-    private fun getIncludeLocalMusicSync(): Boolean {
-        return prefs.getBoolean(KEY_INCLUDE_LOCAL_MUSIC, false)
-    }
+    // Always on (owner, 2026-10-08: settings that should just be on are gone): music on the phone
+    // is always part of the library.
+    private fun getIncludeLocalMusicSync(): Boolean = true
 
     fun addLocalMusicFolder(uri: String) {
         val current = getLocalMusicFoldersSync().toMutableSet()
@@ -65,9 +65,8 @@ class MonoMusicSettingsManager(context: Context) {
         return prefs.getStringSet(KEY_LOCAL_MUSIC_FOLDERS, emptySet()) ?: emptySet()
     }
 
-    fun getCompleteAlbumsWithYouTubeSync(): Boolean {
-        return prefs.getBoolean(KEY_COMPLETE_ALBUMS_WITH_YOUTUBE, false)
-    }
+    // Always on: an album page shows the album's whole track list, missing songs marked.
+    fun getCompleteAlbumsWithYouTubeSync(): Boolean = true
 
     fun setCompleteAlbumsWithYouTube(enabled: Boolean) {
         prefs.edit { putBoolean(KEY_COMPLETE_ALBUMS_WITH_YOUTUBE, enabled) }

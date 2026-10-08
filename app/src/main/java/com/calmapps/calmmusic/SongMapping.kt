@@ -23,6 +23,7 @@ fun Song.toUiModel(): SongUiModel =
         },
         audioUri = localUri ?: id,
         album = album,
+        addedAt = localLastModified,
     )
 
 /** Minimal Song for ids that enter the database outside a scan (playlist adds). */

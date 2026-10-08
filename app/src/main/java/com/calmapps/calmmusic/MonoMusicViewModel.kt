@@ -545,6 +545,7 @@ class MonoMusicViewModel(
                     artist = group.firstNotNullOfOrNull { it.albumArtist } ?: group.first().artist,
                     sourceType = if (group.any { it.hasLocalCopy || !it.isYouTube }) "LOCAL_FILE" else "YOUTUBE",
                     releaseYear = group.mapNotNull { it.releaseYear }.maxOrNull(),
+                    addedAt = group.mapNotNull { it.localLastModified }.maxOrNull(),
                 )
             }
             .sortedBy { it.title.lowercase() }
@@ -558,6 +559,7 @@ class MonoMusicViewModel(
                     name = group.firstNotNullOfOrNull { it.albumArtist } ?: group.first().artist,
                     songCount = group.size,
                     albumCount = group.mapNotNull { it.albumKey }.distinct().size,
+                    addedAt = group.mapNotNull { it.localLastModified }.maxOrNull(),
                 )
             }
             .sortedBy { it.name.lowercase() }
@@ -576,15 +578,19 @@ class MonoMusicViewModel(
 
     fun cachedAlbumSongs(album: AlbumUiModel): List<SongUiModel>? = app.pageCache.album(album.sourceType, album.id)
 
-    suspend fun loadAlbumSongs(album: AlbumUiModel): List<SongUiModel> =
-        getAlbumSongsForDetails(album).also { app.pageCache.putAlbum(album.sourceType, album.id, it) }
+    /**
+     * [quick]: opening the page. A local album's missing songs come from YouTube; if that takes
+     * over 1.5 s the page opens with the songs on the phone, and its quiet refresh adds the rest.
+     */
+    suspend fun loadAlbumSongs(album: AlbumUiModel, quick: Boolean = false): List<SongUiModel> =
+        getAlbumSongsForDetails(album, quick).also { app.pageCache.putAlbum(album.sourceType, album.id, it) }
 
     fun cachedArtistContent(artistId: String): ArtistContent? = app.pageCache.artist(artistId)
 
     suspend fun loadArtistContent(artistId: String, name: String? = null): ArtistContent =
         getArtistContent(artistId, name).also { app.pageCache.putArtist(artistId, it) }
 
-    suspend fun getAlbumSongsForDetails(album: AlbumUiModel): List<SongUiModel> {
+    suspend fun getAlbumSongsForDetails(album: AlbumUiModel, quick: Boolean = false): List<SongUiModel> {
         var localSongs = getAlbumSongs(album.id)
 
         // Broken ordering (missing or duplicated track numbers) repairs itself
@@ -607,7 +613,11 @@ class MonoMusicViewModel(
 
         if (localSongs.isNotEmpty()) {
             if (shouldComplete) {
-                val youtubeSongs = getYouTubeAlbumSongs(album)
+                val youtubeSongs = if (quick) {
+                    kotlinx.coroutines.withTimeoutOrNull(1500) { getYouTubeAlbumSongs(album) }.orEmpty()
+                } else {
+                    getYouTubeAlbumSongs(album)
+                }
                 if (youtubeSongs.isNotEmpty()) {
                     return mergeLocalAndYouTubeAlbums(localSongs, youtubeSongs)
                 }

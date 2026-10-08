@@ -103,6 +103,12 @@ import com.calmapps.calmmusic.ui.PlaylistsScreen
 import com.calmapps.calmmusic.ui.RadioScreen
 import com.calmapps.calmmusic.ui.SearchScreen
 import com.calmapps.calmmusic.ui.SettingsScreen
+import com.calmapps.calmmusic.ui.sortedArtistsFor
+import com.calmapps.calmmusic.ui.sortedFor
+import com.calmapps.calmmusic.ui.SortSheet
+import com.calmapps.calmmusic.ui.SortPage
+import com.calmapps.calmmusic.ui.SortStore
+import com.calmapps.calmmusic.ui.MusicFoldersScreen
 import com.calmapps.calmmusic.ui.SongUiModel
 import com.calmapps.calmmusic.ui.SongsScreen
 import com.calmapps.calmmusic.ui.kit.MmdTheme
@@ -357,6 +363,25 @@ fun MonoMusic(app: MonoMusic) {
     val nowPlayingSong = playbackState.nowPlayingSong
     var isPlaybackPlaying = playbackState.isPlaybackPlaying
 
+    // The open album's download: songs still queued, and whether every song is on the phone.
+    val albumDownload: Pair<Int, Boolean> = run {
+        val a = selectedAlbum ?: return@run 0 to false
+        val songs = app.pageCache.album(a.sourceType, a.id) ?: return@run 0 to false
+        val ids = songs.mapTo(HashSet()) { it.id }
+        val forAlbum = downloadStatuses.filter { it.songId in ids }
+        val left = forAlbum.count { it.state == YouTubeDownloadStatus.State.PENDING || it.state == YouTubeDownloadStatus.State.IN_PROGRESS }
+        val done = forAlbum.filter { it.state == YouTubeDownloadStatus.State.COMPLETED || it.state == YouTubeDownloadStatus.State.SKIPPED }
+            .mapTo(HashSet()) { it.songId }
+        val missing = songs.count { it.sourceType == "YOUTUBE" && it.id !in done }
+        left to (left == 0 && missing == 0 && songs.isNotEmpty())
+    }
+
+    // Sorting (pick 3A): per page, remembered
+    val sortStore = remember { SortStore(app) }
+    var sorts by remember { mutableStateOf(SortPage.entries.associateWith { sortStore.get(it) }) }
+    var sortSheetPage by remember { mutableStateOf<SortPage?>(null) }
+    fun sortOf(page: SortPage) = sorts.getValue(page)
+
     // The artist page's shuffle, shown in the top bar (owner's pick 3A) once its songs are loaded.
     var artistShuffle by remember { mutableStateOf<(() -> Unit)?>(null) }
 
@@ -419,7 +444,7 @@ fun MonoMusic(app: MonoMusic) {
     }
 
     fun openAlbum(album: AlbumUiModel) = openWhenReady(
-        load = { if (viewModel.cachedAlbumSongs(album) == null) viewModel.loadAlbumSongs(album) },
+        load = { if (viewModel.cachedAlbumSongs(album) == null) viewModel.loadAlbumSongs(album, quick = true) },
         open = {
             selectedAlbum = album
             navController.navigate(Screen.AlbumDetails.route) { launchSingleTop = true }
@@ -589,7 +614,7 @@ fun MonoMusic(app: MonoMusic) {
             libraryScope.launch {
                 snackbarHostState.showSnackbar(
                     message = "Playback service is still starting. Please try again.",
-                    withDismissAction = false,
+                    withDismissAction = true,
                     duration = SnackbarDurationMMD.Short,
                 )
             }
@@ -646,7 +671,7 @@ fun MonoMusic(app: MonoMusic) {
             snackbarMessage?.let { message ->
                 snackbarHostState.showSnackbar(
                     message = message,
-                    withDismissAction = false,
+                    withDismissAction = true,
                     duration = SnackbarDurationMMD.Short,
                 )
             }
@@ -664,13 +689,13 @@ fun MonoMusic(app: MonoMusic) {
                 viewModel.removeSongFromLibrary(song)
                 snackbarHostState.showSnackbar(
                     message = "Removed from library",
-                    withDismissAction = false,
+                    withDismissAction = true,
                     duration = SnackbarDurationMMD.Short,
                 )
             } catch (e: Exception) {
                 snackbarHostState.showSnackbar(
                     message = "Failed to remove: ${e.message}",
-                    withDismissAction = false,
+                    withDismissAction = true,
                     duration = SnackbarDurationMMD.Short,
                 )
             }
@@ -686,7 +711,7 @@ fun MonoMusic(app: MonoMusic) {
                         app.youTubeDownloadManager.cancelDownload(download.id)
                         snackbarHostState.showSnackbar(
                             message = "Deleting download...",
-                            withDismissAction = false,
+                            withDismissAction = true,
                             duration = SnackbarDurationMMD.Short,
                         )
                     }
@@ -701,7 +726,7 @@ fun MonoMusic(app: MonoMusic) {
 
                     snackbarHostState.showSnackbar(
                         message = if (success) "Deleted file" else "Couldn't delete file",
-                        withDismissAction = false,
+                        withDismissAction = true,
                         duration = SnackbarDurationMMD.Short,
                     )
                 }
@@ -709,7 +734,7 @@ fun MonoMusic(app: MonoMusic) {
                 else -> {
                     snackbarHostState.showSnackbar(
                         message = "Cannot delete this source type",
-                        withDismissAction = false,
+                        withDismissAction = true,
                         duration = SnackbarDurationMMD.Short,
                     )
                 }
@@ -746,15 +771,8 @@ fun MonoMusic(app: MonoMusic) {
         val controller = localMediaController ?: return@LaunchedEffect
         viewModel.startLocalPlaybackMonitoring(controller)
 
-        PlaybackService.registerSkipNotice { title ->
-            libraryScope.launch {
-                snackbarHostState.showSnackbar(
-                    message = "Can't play “$title”. Skipped.",
-                    withDismissAction = false,
-                    duration = SnackbarDurationMMD.Short,
-                )
-            }
-        }
+        // An unplayable song is skipped without a message (pick 1A: no snackbars).
+        PlaybackService.registerSkipNotice(null)
     }
 
     if (shouldShowPermissionsOnboarding) {
@@ -1007,6 +1025,8 @@ fun MonoMusic(app: MonoMusic) {
                         isPlaylistDetailsMenuExpanded = isPlaylistDetailsMenuExpanded,
                         // a YouTube album, or one downloaded from YouTube (maybe only partly): the
                         // button is there from the first frame; a tap finds what's still missing
+                        albumSongsLeft = albumDownload.first,
+                        albumComplete = albumDownload.second,
                         canDownloadSelectedAlbum = selectedAlbum?.let { a ->
                             a.sourceType == "YOUTUBE" ||
                                 app.pageCache.album(a.sourceType, a.id)
@@ -1016,6 +1036,16 @@ fun MonoMusic(app: MonoMusic) {
                                 selectedAlbum?.sourceType == "YOUTUBE_DOWNLOAD",
                         onArtistShuffleClick = artistShuffle,
                         onOpenPage = { route -> navController.navigate(route) { launchSingleTop = true } },
+                        onSortClick = when (route) {
+                            Screen.Songs.route -> SortPage.SONGS
+                            Screen.Albums.route -> SortPage.ALBUMS
+                            Screen.Artists.route -> SortPage.ARTISTS
+                            Screen.ArtistDetails.route -> SortPage.ARTIST_PAGE
+                            else -> null
+                        }?.let { page -> { sortSheetPage = page } },
+                        activeDownloads = downloadStatuses.count {
+                            it.state == YouTubeDownloadStatus.State.PENDING || it.state == YouTubeDownloadStatus.State.IN_PROGRESS
+                        },
                         onBackClick = { navController.navigateUp() },
                         onCancelPlaylistsEditClick = {
                             isPlaylistsEditMode = false
@@ -1090,21 +1120,9 @@ fun MonoMusic(app: MonoMusic) {
                                         songs.filter { it.sourceType == "YOUTUBE" && it.id !in activeIds },
                                     )
 
-                                    if (toDownload.isEmpty()) {
-                                        snackbarHostState.showSnackbar(
-                                            message = if (album.sourceType == "YOUTUBE") "Nothing to download" else "Album is complete",
-                                            withDismissAction = false,
-                                            duration = SnackbarDurationMMD.Short,
-                                        )
-                                    } else {
-                                        toDownload.forEach { song ->
-                                            app.youTubeDownloadManager.enqueueDownload(song, album.artist)
-                                        }
-                                        snackbarHostState.showSnackbar(
-                                            message = if (toDownload.size == 1) "Downloading 1 song" else "Downloading ${toDownload.size} songs",
-                                            withDismissAction = false,
-                                            duration = SnackbarDurationMMD.Short,
-                                        )
+                                    // no message (pick 1A): the button turns into "N left", then ✓
+                                    toDownload.forEach { song ->
+                                        app.youTubeDownloadManager.enqueueDownload(song, album.artist, album.title)
                                     }
                                 }
                             }
@@ -1168,7 +1186,7 @@ fun MonoMusic(app: MonoMusic) {
                                     snackbarMessage?.let { message ->
                                         snackbarHostState.showSnackbar(
                                             message = message,
-                                            withDismissAction = false,
+                                            withDismissAction = true,
                                             duration = SnackbarDurationMMD.Short,
                                         )
                                     }
@@ -1236,7 +1254,7 @@ fun MonoMusic(app: MonoMusic) {
                 composable(Screen.Artists.route) {
  chrome(Screen.Artists.route) {
                     ArtistsScreen(
-                        artists = libraryArtists,
+                        artists = remember(libraryArtists, sorts) { libraryArtists.sortedArtistsFor(sortOf(SortPage.ARTISTS)) },
                         isLoading = isLoadingSongs || isLoadingAlbums,
                         errorMessage = null,
                         isSyncInProgress = isLibrarySyncInProgress,
@@ -1251,16 +1269,18 @@ fun MonoMusic(app: MonoMusic) {
 }
                 composable(Screen.Songs.route) {
  chrome(Screen.Songs.route) {
+                    val shownSongs = remember(librarySongs, sorts) { librarySongs.sortedFor(sortOf(SortPage.SONGS)) }
                     SongsScreen(
-                        songs = librarySongs,
+                        songs = shownSongs,
                         isLoading = isLoadingSongs,
                         errorMessage = songsError,
                         currentSongId = currentSongId,
                         isSyncInProgress = isLibrarySyncInProgress,
                         onPlaySongClick = { song: SongUiModel ->
-                            val index = librarySongs.indexOfFirst { it.id == song.id }
+                            // play on from the song in the order shown
+                            val index = shownSongs.indexOfFirst { it.id == song.id }
                             val startIndex = if (index >= 0) index else 0
-                            startPlaybackFromQueue(librarySongs, startIndex)
+                            startPlaybackFromQueue(shownSongs, startIndex)
                         },
                         onShuffleClick = {
                             startShuffledPlaybackFromQueue(librarySongs)
@@ -1281,7 +1301,7 @@ fun MonoMusic(app: MonoMusic) {
                 composable(Screen.Albums.route) {
  chrome(Screen.Albums.route) {
                     AlbumsScreen(
-                        albums = libraryAlbums,
+                        albums = remember(libraryAlbums, sorts) { libraryAlbums.sortedFor(sortOf(SortPage.ALBUMS)) },
                         isLoading = isLoadingAlbums,
                         errorMessage = albumsError,
                         isSyncInProgress = isLibrarySyncInProgress,
@@ -1351,6 +1371,7 @@ fun MonoMusic(app: MonoMusic) {
                     ArtistDetailsScreen(
                         artistId = selectedArtistId ?: libraryArtists.find { it.name == selectedArtist }?.id,
                         artistName = selectedArtist,
+                        albumSort = sortOf(SortPage.ARTIST_PAGE),
                         viewModel = viewModel,
                         onPlaySongClick = { song, songs ->
                             val index = songs.indexOfFirst { it.id == song.id }
@@ -1408,7 +1429,8 @@ fun MonoMusic(app: MonoMusic) {
                     DownloadsScreen(
                         downloads = downloads,
                         onCancelDownload = { id -> app.youTubeDownloadManager.cancelDownload(id) },
-                        onClearFinished = { app.youTubeDownloadManager.clearFinishedDownloads() }
+                        onClearFinished = { app.youTubeDownloadManager.clearFinishedDownloads() },
+                        onRetry = { ids -> app.youTubeDownloadManager.retry(ids) },
                     )
                 }
 }
@@ -1418,6 +1440,37 @@ fun MonoMusic(app: MonoMusic) {
                     val context = LocalContext.current
                     val lifecycleOwner = LocalLifecycleOwner.current
 
+
+                    SettingsScreen(
+                        completeAlbumsWithYouTube = completeAlbumsWithYouTube,
+                        onCompleteAlbumsWithYouTubeChange = { enabled ->
+                            settingsManager.setCompleteAlbumsWithYouTube(enabled)
+                        },
+                        includeLocalMusic = includeLocalMusic,
+                        localFolders = localMusicFolders.toList(),
+                        onIncludeLocalMusicChange = { enabled ->
+                            settingsManager.setIncludeLocalMusic(enabled)
+                        },
+                        onOpenFoldersClick = {
+                            navController.navigate(Screen.MusicFolders.route) { launchSingleTop = true }
+                        },
+                        onRescanLocalMusicClick = {
+                            libraryScope.launch {
+                                resyncLocalLibrary(includeLocalMusic, localMusicFolders)
+                            }
+                        },
+                        isRescanningLocal = isRescanningLocal,
+                        localScanProgress = localScanProgress,
+                        isIngestingLocal = isIngestingLocal,
+                        localIngestProgress = localIngestProgress,
+                        localScanTotalDiscovered = localScanTotalDiscovered,
+                        localScanIndexedNewOrUpdated = localScanIndexedNewOrUpdated,
+                        localScanDeletedMissing = localScanDeletedMissing,
+                    )
+                }
+}
+                composable(Screen.MusicFolders.route) {
+ chrome(Screen.MusicFolders.route) {
                     val folderPickerLauncher = rememberLauncherForActivityResult(
                         contract = ActivityResultContracts.OpenDocumentTree(),
                     ) { uri ->
@@ -1431,42 +1484,26 @@ fun MonoMusic(app: MonoMusic) {
                             settingsManager.addLocalMusicFolder(uri.toString())
                         }
                     }
-
-                    SettingsScreen(
-                        selectedTab = settingsSelectedTab,
-                        onSelectedTabChange = { settingsSelectedTab = it },
-                        completeAlbumsWithYouTube = completeAlbumsWithYouTube,
-                        onCompleteAlbumsWithYouTubeChange = { enabled ->
-                            settingsManager.setCompleteAlbumsWithYouTube(enabled)
-                        },
-                        includeLocalMusic = includeLocalMusic,
-                        localFolders = localMusicFolders.toList(),
-                        onIncludeLocalMusicChange = { enabled ->
-                            settingsManager.setIncludeLocalMusic(enabled)
-                        },
-                        onAddFolderClick = {
-                            folderPickerLauncher.launch(null)
-                        },
-                        onRemoveFolderClick = { uri ->
-                            settingsManager.removeLocalMusicFolder(uri)
-                        },
-                        onRescanLocalMusicClick = {
-                            libraryScope.launch {
-                                resyncLocalLibrary(includeLocalMusic, localMusicFolders)
-                            }
-                        },
-                        isRescanningLocal = isRescanningLocal,
-                        localScanProgress = localScanProgress,
-                        isIngestingLocal = isIngestingLocal,
-                        localIngestProgress = localIngestProgress,
-                        localScanTotalDiscovered = localScanTotalDiscovered,
-                        localScanSkippedUnchanged = localScanSkippedUnchanged,
-                        localScanIndexedNewOrUpdated = localScanIndexedNewOrUpdated,
-                        localScanDeletedMissing = localScanDeletedMissing,
+                    MusicFoldersScreen(
+                        folders = localMusicFolders.toList(),
+                        onAddFolderClick = { folderPickerLauncher.launch(null) },
+                        onRemoveFolderClick = { uri -> settingsManager.removeLocalMusicFolder(uri) },
                     )
                 }
 }
             }
+        }
+
+        sortSheetPage?.let { page ->
+            SortSheet(
+                page = page,
+                state = sortOf(page),
+                onChange = { state ->
+                    sorts = sorts + (page to state)
+                    sortStore.set(page, state)
+                },
+                onDismissRequest = { sortSheetPage = null },
+            )
         }
 
         if (showExternalControls) {
@@ -1569,14 +1606,8 @@ fun MonoMusic(app: MonoMusic) {
                         }
                     }
 
+                    // the button itself shows it is downloading; no message
                     app.youTubeDownloadManager.enqueueDownload(song, albumArtist)
-                    libraryScope.launch {
-                        snackbarHostState.showSnackbar(
-                            message = "Download started",
-                            withDismissAction = false,
-                            duration = SnackbarDurationMMD.Short,
-                        )
-                    }
                 },
                 onCancelDownloadClick = {
                     val active = downloadStatuses.firstOrNull { it.songId == song.id && (it.state == YouTubeDownloadStatus.State.PENDING || it.state == YouTubeDownloadStatus.State.IN_PROGRESS) }
@@ -1591,13 +1622,13 @@ fun MonoMusic(app: MonoMusic) {
                             viewModel.addStreamingSongToLibrary(song)
                             snackbarHostState.showSnackbar(
                                 message = "Added to library",
-                                withDismissAction = false,
+                                withDismissAction = true,
                                 duration = SnackbarDurationMMD.Short,
                             )
                         } catch (_: Exception) {
                             snackbarHostState.showSnackbar(
                                 message = "Couldn't add to library",
-                                withDismissAction = false,
+                                withDismissAction = true,
                                 duration = SnackbarDurationMMD.Short,
                             )
                         }
@@ -1776,13 +1807,13 @@ fun MonoMusic(app: MonoMusic) {
                                     selectedAlbum = updatedAlbum
                                     snackbarHostState.showSnackbar(
                                         message = "Album updated",
-                                        withDismissAction = false,
+                                        withDismissAction = true,
                                         duration = SnackbarDurationMMD.Short,
                                     )
                                 } else {
                                     snackbarHostState.showSnackbar(
                                         message = "Couldn't rename album",
-                                        withDismissAction = false,
+                                        withDismissAction = true,
                                         duration = SnackbarDurationMMD.Short,
                                     )
                                 }
@@ -1875,13 +1906,13 @@ fun MonoMusic(app: MonoMusic) {
                                     )
                                     snackbarHostState.showSnackbar(
                                         message = if (updated) "Song updated" else "Couldn't find this song in the library",
-                                        withDismissAction = false,
+                                        withDismissAction = true,
                                         duration = SnackbarDurationMMD.Short,
                                     )
                                 } catch (_: Exception) {
                                     snackbarHostState.showSnackbar(
                                         message = "Couldn't update song",
-                                        withDismissAction = false,
+                                        withDismissAction = true,
                                         duration = SnackbarDurationMMD.Short,
                                     )
                                 }
@@ -1991,7 +2022,7 @@ fun MonoMusic(app: MonoMusic) {
                                     snackbarMessage?.let { message ->
                                         snackbarHostState.showSnackbar(
                                             message = message,
-                                            withDismissAction = false,
+                                            withDismissAction = true,
                                             duration = SnackbarDurationMMD.Short,
                                         )
                                     }
@@ -2117,7 +2148,7 @@ fun MonoMusic(app: MonoMusic) {
                                     snackbarMessage?.let { message ->
                                         snackbarHostState.showSnackbar(
                                             message = message,
-                                            withDismissAction = false,
+                                            withDismissAction = true,
                                             duration = SnackbarDurationMMD.Short,
                                         )
                                     }
@@ -2151,9 +2182,12 @@ fun MonoMusic(app: MonoMusic) {
             }
         }
 
+        val messageLift = (if (nowPlayingSong != null && !showNowPlaying) 67.dp else 0.dp) +
+            (if (currentDestination?.route in navItems.map { it.route }) 60.dp else 0.dp)
         Box(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
+                .padding(bottom = messageLift)
                 .fillMaxWidth()
                 .background(MaterialTheme.colorScheme.background)
         ) {
@@ -2250,6 +2284,7 @@ fun getAppBarTitle(currentRoute: String?): String {
         currentRoute == Screen.Radio.route -> "Radio"
         currentRoute == Screen.Downloads.route -> "Downloads"
         currentRoute == Screen.Settings.route -> "Settings"
+        currentRoute == Screen.MusicFolders.route -> "Music folders"
         currentRoute == Screen.PlaylistEdit.route -> "Edit Playlist"
         currentRoute == Screen.PlaylistAddSongs.route -> "Add Songs"
         currentRoute == Screen.PlaylistDetails.route -> "Playlist"

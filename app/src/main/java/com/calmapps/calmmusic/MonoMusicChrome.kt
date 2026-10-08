@@ -1,5 +1,9 @@
 package com.calmapps.calmmusic
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.material.icons.outlined.DownloadDone
+import androidx.compose.material.icons.automirrored.outlined.Sort
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -72,9 +76,13 @@ fun MonoMusicTopAppBar(
     playlistDetailsSelectionCount: Int,
     isPlaylistDetailsMenuExpanded: Boolean,
     canDownloadSelectedAlbum: Boolean,
+    albumSongsLeft: Int,
+    albumComplete: Boolean,
     canRenameSelectedAlbum: Boolean,
     onArtistShuffleClick: (() -> Unit)?,
     onOpenPage: (String) -> Unit,
+    onSortClick: (() -> Unit)?,
+    activeDownloads: Int,
     onBackClick: () -> Unit,
     onCancelPlaylistsEditClick: () -> Unit,
     onCancelPlaylistDetailsEditClick: () -> Unit,
@@ -218,10 +226,14 @@ fun MonoMusicTopAppBar(
                 isPlaylistDetailsEditMode = isPlaylistDetailsEditMode,
                 isPlaylistDetailsMenuExpanded = isPlaylistDetailsMenuExpanded,
                 canDownloadSelectedAlbum = canDownloadSelectedAlbum,
+                albumSongsLeft = albumSongsLeft,
+                albumComplete = albumComplete,
                 canRenameSelectedAlbum = canRenameSelectedAlbum,
                 hasLibraryPlaylists = selectedPlaylist != null,
                 onArtistShuffleClick = onArtistShuffleClick,
                 onOpenPage = onOpenPage,
+                onSortClick = onSortClick,
+                activeDownloads = activeDownloads,
                 onEnterPlaylistsEditClick = onEnterPlaylistsEditClick,
                 onNavigateToSearchClick = onNavigateToSearchClick,
                 onPlaylistDetailsMenuToggle = onPlaylistDetailsMenuToggle,
@@ -250,10 +262,14 @@ private fun MonoMusicTopAppBarActions(
     isPlaylistDetailsEditMode: Boolean,
     isPlaylistDetailsMenuExpanded: Boolean,
     canDownloadSelectedAlbum: Boolean,
+    albumSongsLeft: Int,
+    albumComplete: Boolean,
     canRenameSelectedAlbum: Boolean,
     hasLibraryPlaylists: Boolean,
     onArtistShuffleClick: (() -> Unit)?,
     onOpenPage: (String) -> Unit,
+    onSortClick: (() -> Unit)?,
+    activeDownloads: Int,
     onEnterPlaylistsEditClick: () -> Unit,
     onNavigateToSearchClick: () -> Unit,
     onPlaylistDetailsMenuToggle: () -> Unit,
@@ -279,6 +295,11 @@ private fun MonoMusicTopAppBarActions(
             }
         }
 
+        if (onSortClick != null) {
+            IconButton(onClick = onSortClick) {
+                Icon(imageVector = Icons.AutoMirrored.Outlined.Sort, contentDescription = "Sort")
+            }
+        }
         IconButton(onClick = onNavigateToSearchClick) {
             Icon(
                 imageVector = Icons.Outlined.Search,
@@ -286,31 +307,21 @@ private fun MonoMusicTopAppBarActions(
             )
         }
 
-        // ⋮ in place of the old More tab: Downloads, Radio, Settings
-        androidx.compose.foundation.layout.Box {
-            var menuOpen by remember { mutableStateOf(false) }
-            IconButton(onClick = { menuOpen = true }) {
-                Icon(
-                    imageVector = Icons.Outlined.MoreVert,
-                    contentDescription = "More",
-                )
-            }
-            DropdownMenuMMD(
-                expanded = menuOpen,
-                onDismissRequest = { menuOpen = false },
-            ) {
-                // Radio off (owner, 2026-10-08)
-                listOf(Screen.Downloads, Screen.Settings).forEachIndexed { i, page ->
-                    if (i > 0) DashedDivider(thickness = 1.dp)
-                    DropdownMenuItemMMD(
-                        text = { TextMMD(page.label) },
-                        onClick = {
-                            menuOpen = false
-                            onOpenPage(page.route)
-                        },
-                    )
+        // Downloads and Settings straight in the bar (owner, 2026-10-08: "move the items out of
+        // the three dots"). Four actions on the tab pages: one over MMD's three, by choice.
+        IconButton(onClick = { onOpenPage(Screen.Downloads.route) }) {
+            if (activeDownloads > 0) {
+                com.mudita.mmd.components.badge.BadgedBoxMMD(
+                    badge = { com.mudita.mmd.components.badge.BadgeMMD { TextMMD(if (activeDownloads > 99) "99+" else "$activeDownloads") } },
+                ) {
+                    Icon(imageVector = Icons.Outlined.Download, contentDescription = "Downloads, $activeDownloads left")
                 }
+            } else {
+                Icon(imageVector = Icons.Outlined.Download, contentDescription = "Downloads")
             }
+        }
+        IconButton(onClick = { onOpenPage(Screen.Settings.route) }) {
+            Icon(imageVector = Icons.Outlined.Settings, contentDescription = "Settings")
         }
     }
 
@@ -357,12 +368,32 @@ private fun MonoMusicTopAppBarActions(
     }
 
     if (currentRoute == Screen.AlbumDetails.route) {
+        // Owner's pick 1A: the button is the feedback, no message. Download → "7 left" (tap: the
+        // Downloads page) → ✓ when every song is on the phone.
         if (canDownloadSelectedAlbum) {
-            IconButton(onClick = onAlbumDownloadClick) {
-                Icon(
-                    imageVector = Icons.Outlined.Download,
-                    contentDescription = "Download album",
-                )
+            when {
+                albumSongsLeft > 0 -> {
+                    com.mudita.mmd.components.buttons.OutlinedButtonMMD(
+                        onClick = { onOpenPage(Screen.Downloads.route) },
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        modifier = Modifier.padding(horizontal = 4.dp),
+                    ) {
+                        TextMMD(text = "$albumSongsLeft left", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                    }
+                }
+                albumComplete -> {
+                    Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                        Icon(imageVector = Icons.Outlined.DownloadDone, contentDescription = "Downloaded")
+                    }
+                }
+                else -> {
+                    IconButton(onClick = onAlbumDownloadClick) {
+                        Icon(
+                            imageVector = Icons.Outlined.Download,
+                            contentDescription = "Download album",
+                        )
+                    }
+                }
             }
         }
         if (canRenameSelectedAlbum) {
@@ -409,6 +440,11 @@ private fun MonoMusicTopAppBarActions(
         }
     }
 
+    if (currentRoute == Screen.ArtistDetails.route && onSortClick != null) {
+        IconButton(onClick = onSortClick) {
+            Icon(imageVector = Icons.AutoMirrored.Outlined.Sort, contentDescription = "Sort albums")
+        }
+    }
     if (currentRoute == Screen.ArtistDetails.route && onArtistShuffleClick != null) {
         IconButton(onClick = onArtistShuffleClick) {
             Icon(

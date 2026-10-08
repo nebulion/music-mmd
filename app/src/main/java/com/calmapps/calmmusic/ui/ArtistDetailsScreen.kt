@@ -38,6 +38,7 @@ import com.mudita.mmd.components.text.TextMMD
 fun ArtistDetailsScreen(
     artistId: String?,
     artistName: String? = null,
+    albumSort: SortState = SortPage.ARTIST_PAGE.default,
     viewModel: MonoMusicViewModel,
     onPlaySongClick: (SongUiModel, List<SongUiModel>) -> Unit,
     onAlbumClick: (AlbumUiModel) -> Unit,
@@ -146,7 +147,9 @@ fun ArtistDetailsScreen(
 
                     if (selectedTab < songsTab) {
                         // Albums or Singles tab
-                        val shown = if (selectedTab == 0) albums else singles
+                        val shown = remember(albums, singles, selectedTab, albumSort) {
+                            (if (selectedTab == 0) albums else singles).sortedFor(albumSort)
+                        }
                         PagedList(
                             contentPadding = PaddingValues(horizontal = 16.dp),
                             verticalArrangement = Arrangement.Top,

@@ -31,6 +31,8 @@ data class SongUiModel(
     /** YouTube artist (`UC…`) and album (`MPREb_…`) ids, when known. */
     val artistId: String? = null,
     val albumId: String? = null,
+    /** When it reached the phone (the file's date); null for songs only on YouTube. */
+    val addedAt: Long? = null,
 )
 
 @Composable

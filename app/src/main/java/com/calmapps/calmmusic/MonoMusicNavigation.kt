@@ -28,6 +28,7 @@ sealed class Screen(val route: String, val label: String, val icon: ImageVector)
     object Radio : Screen("radio", "Radio", Icons.Outlined.Radio) // Add this line
     object Downloads : Screen("downloads", "Downloads", Icons.Outlined.Download)
     object Settings : Screen("settings", "Settings", Icons.Outlined.Settings)
+    object MusicFolders : Screen("musicFolders", "Music folders", Icons.Outlined.Settings)
 }
 
 val navItems = listOf(

@@ -28,6 +28,7 @@ data class ArtistUiModel(
     val name: String,
     val songCount: Int,
     val albumCount: Int,
+    val addedAt: Long? = null,
 )
 
 @Composable

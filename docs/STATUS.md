@@ -146,7 +146,23 @@ two fixes; not re-measured after them because the owner was using the phone.
   Albums on the phone replace their YouTube twins and open your files; library albums YouTube doesn't list are
   kept. Offline or no match: the library alone. Album rows not on the phone show ☁, like song rows.
 - Radio is off (not in the menu; its code and services remain).
-- Waiting for picks: `docs/mockups/round2-options.html` (download feedback, Downloads page, sorting).
+
+### 2026-10-08 — round 2 (picks 1A 2A 3A)
+- **No download messages (1A):** an album's top-bar button goes Download → "7 left" (tap: Downloads) → ✓.
+  "Download started", "Downloading N songs", "Album is complete" and "Can't play … Skipped" are gone. The
+  remaining messages (rename, delete, errors) have an ✕ and sit above the playing strip and tabs.
+- **Downloads page by album (2A):** "Downloading" (newest first, "7 of 12 · current song", ✕ cancels the
+  album), then "Done" (newest first; "N failed · tap to retry"), then Clear.
+- **Sorting (3A):** ⇅ on Songs, Albums, Artists and the artist page opens a sheet of sort keys; tapping the
+  key in use flips its direction. Songs: Title, Artist, Album, Recently added. Albums: Title, Artist, Year,
+  Recently added. Artists: Name, Songs, Recently added. Artist page: Year, Title, Most popular (YouTube's
+  order). Remembered per page. Playing from Songs follows the order shown.
+- **Top bar:** Downloads (with a count while downloading) and Settings are icons, no ⋮. Tab pages carry
+  ⇅ ⌕ ⤓ ⚙ — four actions, one over MMD's three, by the owner's choice.
+- **Settings, Kompakt style:** one page of rows (Music folders › · Rescan with its last result · Flash to
+  clear ghosting · Flash every N taps → radio sheet); Music folders is its own page. Removed, now always on:
+  "Complete albums with YouTube" (album pages always show the whole track list; a local album opens with
+  what YouTube returns within 1.5 s, the rest fills in quietly) and "Include local music".
 
 ## Owner's decisions
 - 2026-10-07: fork MonoMusic only; CalmMusic compared and not used.
@@ -160,3 +176,4 @@ two fixes; not re-measured after them because the owner was using the phone.
   - **3A** — artist page tabs Albums · Singles · Songs (as built); shuffle moves to the top bar.
   - **4C** — Now Playing keeps the slider and position updating every second (owner's choice, like Fit's rest timer).
 - 2026-10-08: app name MonoMusic; old MonoMusic uninstalled (its data didn't matter). More tab → top-bar ⋮.
+- 2026-10-08: round 2 picks 1A 2A 3A (sorting toggles direction on a second tap); Downloads and Settings as top-bar icons; Radio off; settings that should just be on are removed.
