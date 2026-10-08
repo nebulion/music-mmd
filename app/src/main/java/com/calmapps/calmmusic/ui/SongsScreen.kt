@@ -123,18 +123,6 @@ fun SongsScreen(
             }
         }
 
-        if (!isLoading && errorMessage == null && songs.isNotEmpty()) {
-            FloatingActionButtonMMD(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(16.dp),
-                onClick = onShuffleClick,
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Shuffle,
-                    contentDescription = "Shuffle songs",
-                )
-            }
-        }
+        // no floating shuffle (owner, 2026-10-08): Now Playing's shuffle does it
     }
 }

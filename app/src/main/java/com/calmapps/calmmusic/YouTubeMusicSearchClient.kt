@@ -12,5 +12,8 @@ data class YouTubeSongResult(
 )
 
 interface YouTubeMusicSearchClient {
+    /** All of YouTube (videos), for what YouTube Music doesn't have. */
+    suspend fun searchVideos(term: String, limit: Int = 25): List<YouTubeSongResult>
+
     suspend fun searchSongs(term: String, limit: Int = 25): List<YouTubeSongResult>
 }

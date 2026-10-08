@@ -58,6 +58,33 @@ internal class YouTubeMusicSearchClientImpl(
         }
     }
 
+    /**
+     * All of YouTube, not just YouTube Music (owner, 2026-10-08: "if I really can't find something"):
+     * uploads, live versions, rare tracks. Videos play like songs (same stream resolver).
+     */
+    override suspend fun searchVideos(term: String, limit: Int): List<YouTubeSongResult> {
+        if (term.isBlank() || limit <= 0) return emptyList()
+        return withContext(Dispatchers.IO) {
+            YouTubeStreamResolver.ensureInitialized(httpClient)
+            val service = ServiceList.YouTube
+            val queryHandler = service.searchQHFactory.fromQuery(term, listOf("videos"), null)
+            SearchInfo.getInfo(service, queryHandler).relatedItems.asSequence()
+                .filterIsInstance<StreamInfoItem>()
+                .mapNotNull { item ->
+                    val videoId = extractVideoIdFromUrl(item.url) ?: return@mapNotNull null
+                    YouTubeSongResult(
+                        videoId = videoId,
+                        title = item.name.orEmpty(),
+                        artist = item.uploaderName,
+                        durationMillis = item.duration.takeIf { it > 0 }?.let { it * 1000L },
+                    )
+                }
+                .distinctBy { it.videoId }
+                .take(limit)
+                .toList()
+        }
+    }
+
     companion object {
         fun create(): YouTubeMusicSearchClient {
             val client = OkHttpClient.Builder().build()

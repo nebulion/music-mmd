@@ -578,8 +578,10 @@ class MonoMusicViewModel(
 
     suspend fun refreshLibraryFromDatabase() {
         try {
-            val songs = withContext(Dispatchers.IO) { songDao.getAll() }
-            songKeys = songs.associate { it.id to (it.albumKey to it.artistKey) }
+            val all = withContext(Dispatchers.IO) { songDao.getAll() }
+            songKeys = all.associate { it.id to (it.albumKey to it.artistKey) }
+            // a song on the phone twice (download + own copy) is listed once
+            val songs = com.calmapps.calmmusic.data.Dedupe.songs(all)
             _librarySongs.value = songs.map { it.toUiModel() }
             _libraryAlbums.value = deriveAlbums(songs)
             _libraryArtists.value = deriveArtists(songs)
@@ -654,7 +656,7 @@ class MonoMusicViewModel(
 
     suspend fun getAlbumSongs(albumId: String): List<SongUiModel> =
         withContext(Dispatchers.IO) {
-            songDao.getByAlbumKey(albumId).map { it.toUiModel() }
+            com.calmapps.calmmusic.data.Dedupe.songs(songDao.getByAlbumKey(albumId)).map { it.toUiModel() }
         }
 
     /** Albums already looked up this session, successful or not. */
@@ -914,7 +916,7 @@ class MonoMusicViewModel(
     }
 
     private suspend fun getLibraryArtistContent(artistId: String): ArtistContent = withContext(Dispatchers.IO) {
-            val songs = songDao.getByArtistKey(artistId)
+            val songs = com.calmapps.calmmusic.data.Dedupe.songs(songDao.getByArtistKey(artistId))
             ArtistContent(
                 songs = songs.map { it.toUiModel() },
                 albums = deriveAlbums(songs).sortedWith(

@@ -188,6 +188,20 @@ two fixes; not re-measured after them because the owner was using the phone.
   Fix: on each song change the playback service loads the cover (CoverStore) and puts it in the item's
   metadata as PNG bytes (`replaceMediaItem`, playback continues). **Device check owed** with InkOS.
 
+### 2026-10-08 — search, duplicates, no FABs
+- **Empty search tabs** offer the next step instead of "No songs. Try a different search." (UI-PATTERNS A3):
+  the other tabs that found something ("Albums · 3 found ›"), or, when nothing was found anywhere,
+  "Nothing for “…” · tap to change the search" and "Search all of YouTube". A search opens on the first tab
+  with results.
+- **Search all of YouTube:** the Songs tab ends with "Search all of YouTube" (NewPipe, videos filter):
+  uploads, live versions, rare tracks; they play like songs.
+- **Duplicates** (`data/Dedupe.kt`, tested): a song on the phone twice (download + own copy from an added
+  folder) is listed once — same album (or artist) + same title + length within 3 s; the bigger file is kept.
+  Read-time only: nothing is deleted.
+- **No floating buttons for shuffle:** album and playlist pages have shuffle in the top bar (like artists); the
+  Songs tab's is gone (Now Playing's shuffle toggle). The playlist page keeps its "Add songs" button.
+- Queue rows: length before artist, so ✕ never cuts the time.
+
 ## Owner's decisions
 - 2026-10-07: fork MonoMusic only; CalmMusic compared and not used.
 - 2026-10-07: full Kompakt treatment, like Macros and Fit.

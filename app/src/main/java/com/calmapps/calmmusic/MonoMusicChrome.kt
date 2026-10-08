@@ -445,7 +445,13 @@ private fun MonoMusicTopAppBarActions(
             Icon(imageVector = Icons.Outlined.FilterList, contentDescription = "Sort albums")
         }
     }
-    if (currentRoute == Screen.ArtistDetails.route && onArtistShuffleClick != null) {
+    // shuffle in the top bar of artist, album and playlist pages (no floating buttons)
+    if (onArtistShuffleClick != null && (
+            currentRoute == Screen.ArtistDetails.route ||
+                currentRoute == Screen.AlbumDetails.route ||
+                currentRoute?.startsWith(Screen.PlaylistDetails.route) == true
+            )
+    ) {
         IconButton(onClick = onArtistShuffleClick) {
             Icon(
                 imageVector = Icons.Outlined.Shuffle,

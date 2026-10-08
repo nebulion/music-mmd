@@ -43,6 +43,7 @@ fun AlbumDetailsScreen(
     onRemoveFromLibraryClick: (SongUiModel) -> Unit,
     onDeleteClick: (SongUiModel) -> Unit,
     librarySongIds: Set<String> = emptySet(),
+    onShuffleAvailable: (List<SongUiModel>?) -> Unit = {},
 ) {
     // Opened only once its songs are cached (see PageCache): drawn complete, in one paint.
     val cached = remember(album?.id) { album?.let { viewModel.cachedAlbumSongs(it) } }
@@ -73,6 +74,11 @@ fun AlbumDetailsScreen(
             isLoading = false
         }
     }
+
+    // Shuffle lives in the top bar (owner, 2026-10-08: no floating shuffle buttons)
+    val shuffleSongs = if (!isLoading && errorMessage == null && songs.isNotEmpty()) songs else null
+    LaunchedEffect(shuffleSongs) { onShuffleAvailable(shuffleSongs) }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { onShuffleAvailable(null) } }
 
     val discNumbers = remember(songs) {
         songs.map { it.discNumber ?: 1 }.distinct().sorted()
@@ -161,19 +167,6 @@ fun AlbumDetailsScreen(
             }
         }
 
-        if (!isLoading && errorMessage == null && songs.isNotEmpty()) {
-            FloatingActionButtonMMD(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(16.dp),
-                onClick = { onShuffleClick(songs) },
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Shuffle,
-                    contentDescription = "Shuffle album",
-                )
-            }
-        }
     }
 }
 

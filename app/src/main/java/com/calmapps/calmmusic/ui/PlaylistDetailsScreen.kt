@@ -56,6 +56,7 @@ fun PlaylistDetailsScreen(
     onAddToPlaylistClick: (SongUiModel) -> Unit,
     onRemoveFromLibraryClick: (SongUiModel) -> Unit,
     onDeleteClick: (SongUiModel) -> Unit,
+    onShuffleAvailable: (List<SongUiModel>?) -> Unit = {},
 ) {
     // Local State
     // Opened only once its songs are cached (see PageCache): drawn complete, in one paint.
@@ -89,6 +90,11 @@ fun PlaylistDetailsScreen(
             isLoading = false
         }
     }
+
+    // Shuffle lives in the top bar (owner, 2026-10-08: no floating shuffle buttons)
+    val shuffleSongs = if (!isLoading && errorMessage == null && songs.isNotEmpty()) songs else null
+    LaunchedEffect(shuffleSongs) { onShuffleAvailable(shuffleSongs) }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { onShuffleAvailable(null) } }
 
     LaunchedEffect(isInEditMode) {
         if (!isInEditMode && selectedState.isNotEmpty()) {
@@ -215,15 +221,6 @@ fun PlaylistDetailsScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 horizontalAlignment = Alignment.End,
             ) {
-                FloatingActionButtonMMD(
-                    onClick = { onShuffleClick(songs) },
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Shuffle,
-                        contentDescription = "Shuffle playlist",
-                    )
-                }
-
                 FloatingActionButtonMMD(
                     onClick = onAddSongsClick,
                 ) {

@@ -395,6 +395,9 @@ fun MonoMusic(app: MonoMusic) {
     var searchSongs by remember { mutableStateOf(savedUi.searchSongs) }
     var searchAlbums by remember { mutableStateOf(savedUi.searchAlbums) }
     var searchArtists by remember { mutableStateOf(savedUi.searchArtists) }
+    // all of YouTube, asked for per search (null = not asked yet)
+    var searchVideos by remember { mutableStateOf<List<SongUiModel>?>(null) }
+    var isSearchingVideos by remember { mutableStateOf(false) }
     var searchLocalSongs by remember { mutableStateOf(savedUi.searchLocalSongs) }
     var searchSelectedTab by remember { mutableStateOf(savedUi.searchTab) }
     var isSearching by remember { mutableStateOf(false) }
@@ -503,6 +506,7 @@ fun MonoMusic(app: MonoMusic) {
         searchScope.launch {
             isSearching = true
             searchError = null
+            searchVideos = null
             searchSelectedTab = 0
             try {
                 val songResults = app.youTubeInnertubeClient.searchSongs(
@@ -547,6 +551,13 @@ fun MonoMusic(app: MonoMusic) {
 
                 val topVideoIds = songResults.take(5).map { it.videoId }
                 app.youTubePrecacheManager.precacheSearchResults(topVideoIds)
+                // open on a tab that found something (songs first), in the same frame as the results
+                searchSelectedTab = when {
+                    searchSongs.isNotEmpty() || searchLocalSongs.isNotEmpty() -> 0
+                    searchAlbums.isNotEmpty() -> 1
+                    searchArtists.isNotEmpty() -> 2
+                    else -> 0
+                }
             } catch (e: Exception) {
                 searchError = e.message ?: "Search failed"
                 searchSongs = emptyList()
@@ -875,6 +886,9 @@ fun MonoMusic(app: MonoMusic) {
             }
 
             PlaylistDetailsScreen(
+                onShuffleAvailable = { songs ->
+                    artistShuffle = songs?.let { { startShuffledPlaybackFromQueue(it) } }
+                },
                 playlistId = playlistId,
                 playbackViewModel = viewModel,
                 playlistsViewModel = playlistsViewModel,
@@ -1320,6 +1334,39 @@ fun MonoMusic(app: MonoMusic) {
                         },
                         onAlbumClick = { album: AlbumUiModel -> openAlbum(album) },
                         onArtistClick = { artist -> openArtist(artist.name, artist.id) },
+                        query = searchQuery,
+                        onEditSearch = { focusRequester.requestFocus() },
+                        videos = searchVideos,
+                        isSearchingVideos = isSearchingVideos,
+                        onSearchVideos = {
+                            if (!isSearchingVideos) searchScope.launch {
+                                isSearchingVideos = true
+                                searchSelectedTab = 0
+                                val q = searchQuery.trim()
+                                searchVideos = try {
+                                    app.youTubeSearchClient.searchVideos(q, 25).map {
+                                        SongUiModel(
+                                            id = it.videoId,
+                                            title = it.title,
+                                            artist = it.artist.orEmpty(),
+                                            durationText = formatDurationMillis(it.durationMillis),
+                                            durationMillis = it.durationMillis,
+                                            sourceType = "YOUTUBE",
+                                            audioUri = it.videoId,
+                                        )
+                                    }
+                                } catch (e: kotlinx.coroutines.CancellationException) {
+                                    throw e
+                                } catch (_: Exception) {
+                                    emptyList()
+                                }
+                                isSearchingVideos = false
+                            }
+                        },
+                        onPlayVideoClick = { video ->
+                            val list = searchVideos.orEmpty()
+                            startPlaybackFromQueue(list, list.indexOfFirst { it.id == video.id }.coerceAtLeast(0))
+                        },
                         librarySongIds = librarySongIds,
                     )
                 }
@@ -1327,6 +1374,9 @@ fun MonoMusic(app: MonoMusic) {
                 composable(Screen.AlbumDetails.route) {
  chrome(Screen.AlbumDetails.route) {
                     AlbumDetailsScreen(
+                        onShuffleAvailable = { songs ->
+                            artistShuffle = songs?.let { { startShuffledPlaybackFromQueue(it) } }
+                        },
                         album = selectedAlbum,
                         viewModel = viewModel,
                         onPlaySongClick = { song, songs ->

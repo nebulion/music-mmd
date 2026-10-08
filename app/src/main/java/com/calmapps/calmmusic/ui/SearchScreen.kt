@@ -1,5 +1,6 @@
 package com.calmapps.calmmusic.ui
 
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import com.calmapps.calmmusic.ui.kit.ListRow
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -47,6 +48,13 @@ fun SearchScreen(
     onPlaySongClick: (SongUiModel) -> Unit,
     onAlbumClick: (AlbumUiModel) -> Unit,
     onArtistClick: (ArtistResultUiModel) -> Unit,
+    query: String = "",
+    onEditSearch: () -> Unit = {},
+    /** Results from all of YouTube; null until asked for. */
+    videos: List<SongUiModel>? = null,
+    isSearchingVideos: Boolean = false,
+    onSearchVideos: () -> Unit = {},
+    onPlayVideoClick: (SongUiModel) -> Unit = {},
     librarySongIds: Set<String> = emptySet(),
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
@@ -85,6 +93,14 @@ fun SearchScreen(
                         }
                     }
 
+                    val localIds = localSongs.mapTo(HashSet()) { it.id }
+                    val found = listOf(
+                        localSongs.size + songs.count { it.id !in localIds },
+                        albums.size,
+                        artists.size,
+                    )
+                    val emptyHere = !isSearching && errorMessage == null && query.isNotBlank()
+
                     when (selectedTab) {
                         0 -> {
                             // your own songs first, marked ✓; then YouTube's, without repeats
@@ -104,13 +120,13 @@ fun SearchScreen(
                                 }
                             }
 
-                            if (
-                                !isSearching &&
-                                errorMessage == null &&
-                                combined.isEmpty()
-                            ) {
+                            if (query.isNotBlank() && !isSearching) {
+                                allOfYouTube(videos, isSearchingVideos, onSearchVideos, onPlayVideoClick)
+                            }
+
+                            if (emptyHere && combined.isEmpty() && videos == null) {
                                 item {
-                                    TextMMD(text = "No songs. Try a different search.")
+                                    EmptyTab(query, found, onSelectedTabChange, onEditSearch, onSearchVideos)
                                 }
                             }
                         }
@@ -127,13 +143,9 @@ fun SearchScreen(
                                 }
                             }
 
-                            if (
-                                !isSearching &&
-                                errorMessage == null &&
-                                albums.isEmpty()
-                            ) {
+                            if (emptyHere && albums.isEmpty()) {
                                 item {
-                                    TextMMD(text = "No albums. Try a different search.")
+                                    EmptyTab(query, found, onSelectedTabChange, onEditSearch, onSearchVideos)
                                 }
                             }
                         }
@@ -150,9 +162,9 @@ fun SearchScreen(
                                 }
                             }
 
-                            if (!isSearching && errorMessage == null && artists.isEmpty()) {
+                            if (emptyHere && artists.isEmpty()) {
                                 item {
-                                    TextMMD(text = "No artists. Try a different search.")
+                                    EmptyTab(query, found, onSelectedTabChange, onEditSearch, onSearchVideos)
                                 }
                             }
                         }
@@ -176,4 +188,88 @@ private fun ArtistResultItem(
         showDivider = showDivider,
         modifier = Modifier.clickable(onClick = onClick),
     )
+}
+
+/**
+ * A tab with nothing in it offers the next step instead of a message (UI-PATTERNS A3: "a spot
+ * that changes with the moment"): the tabs that did find something, one tap each; when nothing
+ * was found anywhere, one row that puts you back in the search field.
+ */
+@Composable
+private fun EmptyTab(
+    query: String,
+    found: List<Int>,
+    onSelectTab: (Int) -> Unit,
+    onEditSearch: () -> Unit,
+    onSearchVideos: () -> Unit,
+) {
+    val elsewhere = found.withIndex().filter { it.value > 0 }
+    Column {
+        if (elsewhere.isEmpty()) {
+            com.calmapps.calmmusic.ui.kit.ListRow(
+                title = "Nothing for \u201c$query\u201d",
+                subtitle = "Tap to change the search",
+                modifier = Modifier.clickable(onClick = onEditSearch),
+            )
+            com.calmapps.calmmusic.ui.kit.ListRow(
+                title = "Search all of YouTube",
+                subtitle = "Videos, live versions, uploads",
+                showDivider = false,
+                modifier = Modifier.clickable(onClick = onSearchVideos),
+            )
+        } else {
+            elsewhere.forEachIndexed { i, (tab, count) ->
+                com.calmapps.calmmusic.ui.kit.ListRow(
+                    title = SEARCH_TABS[tab],
+                    subtitle = "$count found",
+                    showDivider = i != elsewhere.lastIndex,
+                    modifier = Modifier.clickable { onSelectTab(tab) },
+                    trailing = {
+                        androidx.compose.material3.Icon(
+                            androidx.compose.material.icons.Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                            contentDescription = null,
+                        )
+                    },
+                )
+            }
+        }
+    }
+}
+
+/**
+ * The end of the Songs tab: "Search all of YouTube" until asked, then the videos found
+ * (owner, 2026-10-08: for what YouTube Music doesn't have).
+ */
+private fun androidx.compose.foundation.lazy.LazyListScope.allOfYouTube(
+    videos: List<SongUiModel>?,
+    isSearching: Boolean,
+    onSearch: () -> Unit,
+    onPlay: (SongUiModel) -> Unit,
+) {
+    when {
+        videos == null -> item(key = "all-youtube") {
+            com.calmapps.calmmusic.ui.kit.ListRow(
+                title = if (isSearching) "Searching all of YouTube" else "Search all of YouTube",
+                subtitle = "Videos, live versions, uploads",
+                showDivider = false,
+                modifier = Modifier.clickable(enabled = !isSearching, onClick = onSearch),
+            )
+        }
+        else -> {
+            item(key = "videos-title") { com.calmapps.calmmusic.ui.kit.SectionTitle("All of YouTube") }
+            if (videos.isEmpty()) {
+                item(key = "videos-none") { com.calmapps.calmmusic.ui.kit.ListRow(title = "No videos either", showDivider = false) }
+            }
+            videos.forEachIndexed { i, video ->
+                item(key = "v:" + video.id) {
+                    SongItem(
+                        song = video,
+                        isCurrentlyPlaying = false,
+                        onClick = { onPlay(video) },
+                        showDivider = i != videos.lastIndex,
+                    )
+                }
+            }
+        }
+    }
 }
