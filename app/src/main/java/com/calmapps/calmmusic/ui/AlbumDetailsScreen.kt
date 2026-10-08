@@ -1,5 +1,7 @@
 package com.calmapps.calmmusic.ui
 
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -111,6 +113,7 @@ fun AlbumDetailsScreen(
 
             else -> {
                 Column(modifier = Modifier.fillMaxSize()) {
+                    if (album != null) AlbumHeader(album, songs)
                     if (discNumbers.size > 1) {
                         PrimaryTabRowMMD(selectedTabIndex = selectedDiscIndex) {
                             discNumbers.forEachIndexed { index, disc ->
@@ -172,4 +175,43 @@ fun AlbumDetailsScreen(
             }
         }
     }
+}
+
+/**
+ * Which album this is, at a glance: its cover (Settings → Album covers), artist, year and songs.
+ * The cover was loaded before the page opened, so the header is drawn complete.
+ */
+@Composable
+private fun AlbumHeader(album: AlbumUiModel, songs: List<SongUiModel>) {
+    val app = androidx.compose.ui.platform.LocalContext.current.applicationContext as com.calmapps.calmmusic.MonoMusic
+    val showCover = com.calmapps.calmmusic.ui.kit.coversShown()
+    val cover = remember(album.sourceType, album.id) { app.covers.peek(album) }
+    val onPhone = songs.count { it.sourceType != "YOUTUBE" }
+    androidx.compose.foundation.layout.Row(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (showCover) {
+            com.calmapps.calmmusic.ui.kit.CoverBox(cover, 96.dp)
+            androidx.compose.foundation.layout.Spacer(Modifier.width(16.dp))
+        }
+        Column(Modifier.weight(1f)) {
+            album.artist?.takeIf { it.isNotBlank() }?.let {
+                TextMMD(it, style = androidx.compose.material3.MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1)
+            }
+            TextMMD(
+                listOfNotNull(album.releaseYear?.toString(), if (songs.size == 1) "1 song" else "${songs.size} songs").joinToString(" · "),
+                style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+            )
+            TextMMD(
+                when (onPhone) {
+                    0 -> "On YouTube Music"
+                    songs.size -> "On this phone"
+                    else -> "$onPhone of ${songs.size} on this phone"
+                },
+                style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+            )
+        }
+    }
+    com.mudita.mmd.components.divider.HorizontalDividerMMD(thickness = 1.dp)
 }

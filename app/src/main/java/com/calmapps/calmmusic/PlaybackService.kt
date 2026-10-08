@@ -98,11 +98,14 @@ class PlaybackService : MediaSessionService() {
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 if (isPlaying) retries = 0
+                schedulePlayCount(player)
             }
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 retries = 0
+                countedId = null
                 updatePrecacheWindow(player)
+                schedulePlayCount(player)
             }
 
             override fun onTimelineChanged(timeline: Timeline, reason: Int) {
@@ -161,6 +164,32 @@ class PlaybackService : MediaSessionService() {
                 player.playWhenReady = false
                 player.prepare()
             }
+        }
+    }
+
+    /** The song already counted as played this time through (once per play, not per resume). */
+    private var countedId: String? = null
+    private val countPlay = Runnable { countIfPlayedEnough() }
+    private var countingPlayer: Player? = null
+
+    /** A play counts once the song has played 30 s (PlayHistory), checked when that point is due. */
+    private fun schedulePlayCount(player: Player) {
+        countingPlayer = player
+        handler.removeCallbacks(countPlay)
+        if (!player.isPlaying) return
+        val due = com.calmapps.calmmusic.data.PlayHistory.PLAY_COUNTS_AFTER_MS - player.currentPosition
+        handler.postDelayed(countPlay, due.coerceAtLeast(1_000L))
+    }
+
+    private fun countIfPlayedEnough() {
+        val player = countingPlayer ?: return
+        val id = player.currentMediaItem?.mediaId ?: return
+        if (id == countedId) return
+        if (player.currentPosition >= com.calmapps.calmmusic.data.PlayHistory.PLAY_COUNTS_AFTER_MS - 1_000L) {
+            countedId = id
+            (application as MonoMusic).playHistory.recordPlay(id)
+        } else {
+            schedulePlayCount(player)
         }
     }
 

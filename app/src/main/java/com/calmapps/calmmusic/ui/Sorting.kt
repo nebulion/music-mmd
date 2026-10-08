@@ -20,7 +20,16 @@ enum class SortKey(val label: String, val ascending: String, val descending: Str
     ADDED("Recently added", "oldest first", "newest first", false),
     SONGS("Songs", "fewest first", "most first", false),
     POPULAR("Most popular", "least first", "most first", false),
+    MOST_PLAYED("Most played", "least first", "most first", false),
+    RECENTLY_PLAYED("Recently played", "longest ago first", "latest first", false),
 }
+
+/** Play counts for sorting, looked up per song, album or artist id (see PlayHistory). */
+class PlayStats(
+    val song: (String) -> com.calmapps.calmmusic.data.PlayStat? = { null },
+    val album: (String) -> com.calmapps.calmmusic.data.PlayStat? = { null },
+    val artist: (String) -> com.calmapps.calmmusic.data.PlayStat? = { null },
+)
 
 data class SortState(val key: SortKey, val ascending: Boolean) {
     val label: String get() = "${key.label} · ${if (ascending) key.ascending else key.descending}"
@@ -32,9 +41,9 @@ data class SortState(val key: SortKey, val ascending: Boolean) {
 
 /** The pages that sort, their keys and where they start. */
 enum class SortPage(val title: String, val keys: List<SortKey>, val default: SortState) {
-    SONGS("Sort songs", listOf(SortKey.TITLE, SortKey.ARTIST, SortKey.ALBUM, SortKey.ADDED), SortState(SortKey.TITLE, true)),
-    ALBUMS("Sort albums", listOf(SortKey.TITLE, SortKey.ARTIST, SortKey.YEAR, SortKey.ADDED), SortState(SortKey.TITLE, true)),
-    ARTISTS("Sort artists", listOf(SortKey.NAME, SortKey.SONGS, SortKey.ADDED), SortState(SortKey.NAME, true)),
+    SONGS("Sort songs", listOf(SortKey.TITLE, SortKey.ARTIST, SortKey.ALBUM, SortKey.ADDED, SortKey.MOST_PLAYED, SortKey.RECENTLY_PLAYED), SortState(SortKey.TITLE, true)),
+    ALBUMS("Sort albums", listOf(SortKey.TITLE, SortKey.ARTIST, SortKey.YEAR, SortKey.ADDED, SortKey.MOST_PLAYED, SortKey.RECENTLY_PLAYED), SortState(SortKey.TITLE, true)),
+    ARTISTS("Sort artists", listOf(SortKey.NAME, SortKey.SONGS, SortKey.ADDED, SortKey.MOST_PLAYED, SortKey.RECENTLY_PLAYED), SortState(SortKey.NAME, true)),
     ARTIST_PAGE("Sort albums", listOf(SortKey.YEAR, SortKey.TITLE, SortKey.POPULAR), SortState(SortKey.YEAR, false)),
 }
 
@@ -67,7 +76,9 @@ private fun <T> List<T>.byText(ascending: Boolean, key: (T) -> String?): List<T>
 }
 
 @JvmName("sortedSongsFor")
-fun List<SongUiModel>.sortedFor(state: SortState): List<SongUiModel> = when (state.key) {
+fun List<SongUiModel>.sortedFor(state: SortState, stats: PlayStats = PlayStats()): List<SongUiModel> = when (state.key) {
+    SortKey.MOST_PLAYED -> by(state.ascending) { stats.song(it.id)?.count }
+    SortKey.RECENTLY_PLAYED -> by(state.ascending) { stats.song(it.id)?.lastPlayed }
     SortKey.ARTIST -> byText(state.ascending) { it.artist }
     SortKey.ALBUM -> byText(state.ascending) { it.album }
     SortKey.ADDED -> by(state.ascending) { it.addedAt }
@@ -75,7 +86,9 @@ fun List<SongUiModel>.sortedFor(state: SortState): List<SongUiModel> = when (sta
 }
 
 @JvmName("sortedAlbumsFor")
-fun List<AlbumUiModel>.sortedFor(state: SortState): List<AlbumUiModel> = when (state.key) {
+fun List<AlbumUiModel>.sortedFor(state: SortState, stats: PlayStats = PlayStats()): List<AlbumUiModel> = when (state.key) {
+    SortKey.MOST_PLAYED -> by(state.ascending) { stats.album(it.id)?.count }
+    SortKey.RECENTLY_PLAYED -> by(state.ascending) { stats.album(it.id)?.lastPlayed }
     SortKey.ARTIST -> byText(state.ascending) { it.artist }
     SortKey.YEAR -> by(state.ascending) { it.releaseYear }
     SortKey.ADDED -> by(state.ascending) { it.addedAt }
@@ -84,7 +97,9 @@ fun List<AlbumUiModel>.sortedFor(state: SortState): List<AlbumUiModel> = when (s
     else -> byText(state.ascending) { it.title }
 }
 
-fun List<ArtistUiModel>.sortedArtistsFor(state: SortState): List<ArtistUiModel> = when (state.key) {
+fun List<ArtistUiModel>.sortedArtistsFor(state: SortState, stats: PlayStats = PlayStats()): List<ArtistUiModel> = when (state.key) {
+    SortKey.MOST_PLAYED -> by(state.ascending) { stats.artist(it.id)?.count }
+    SortKey.RECENTLY_PLAYED -> by(state.ascending) { stats.artist(it.id)?.lastPlayed }
     SortKey.SONGS -> by(state.ascending) { it.songCount }
     SortKey.ADDED -> by(state.ascending) { it.addedAt }
     else -> byText(state.ascending) { it.name }

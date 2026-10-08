@@ -71,7 +71,11 @@ fun DownloadsScreen(
                     val inProgress = g.active.firstOrNull { it.state == State.IN_PROGRESS }
                     val status = buildString {
                         append("${g.done} of ${g.items.size}")
-                        if (inProgress != null) append(" · ${inProgress.title}") else append(" · waiting")
+                        when {
+                            inProgress != null -> append(" · ${inProgress.title}")
+                            g.active.any { it.errorMessage == com.calmapps.calmmusic.WAITING_FOR_WIFI } -> append(" · waiting for Wi-Fi")
+                            else -> append(" · waiting")
+                        }
                     }
                     ListRow(
                         title = g.title,

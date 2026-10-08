@@ -191,6 +191,67 @@ class MonoMusicViewModel(
         startPlaybackFromQueue(shuffledQueue, 0, isNewQueue = false, localController = localController)
     }
 
+    // ------------------------------------------------------------------
+    // Queue page
+    // ------------------------------------------------------------------
+
+    /** Plays the queue's song at [index]. */
+    fun playQueueIndex(controller: MediaController?, index: Int) {
+        val state = _playbackState.value
+        val queue = state.playbackQueue
+        if (index !in queue.indices) return
+        val target = queue[index]
+        _playbackState.value = state.copy(
+            playbackQueueIndex = index,
+            currentSongId = target.id,
+            nowPlayingSong = target,
+            nowPlayingDurationMs = target.durationMillis ?: state.nowPlayingDurationMs,
+            nowPlayingPositionMs = 0L,
+            isPlaybackPlaying = true,
+        )
+        persistPlaybackSnapshot()
+        controller ?: return
+        if (controller.mediaItemCount == 0) {
+            startPlaybackFromQueue(queue, index, isNewQueue = false, localController = controller)
+        } else {
+            controller.seekTo(index, 0L)
+            controller.playWhenReady = true
+        }
+    }
+
+    /** Moves a queued song; the player's own queue moves with it. */
+    fun moveInQueue(controller: MediaController?, from: Int, to: Int) {
+        val state = _playbackState.value
+        val queue = state.playbackQueue.toMutableList()
+        if (from !in queue.indices || to !in queue.indices || from == to) return
+        val moved = queue.removeAt(from)
+        queue.add(to, moved)
+        val currentId = state.currentSongId
+        val current = state.playbackQueueIndex
+        val newIndex = when (current) {
+            null -> null
+            from -> to
+            in (from + 1)..to -> current - 1
+            in to until from -> current + 1
+            else -> current
+        }
+        _playbackState.value = state.copy(playbackQueue = queue, playbackQueueIndex = newIndex, currentSongId = currentId)
+        persistPlaybackSnapshot()
+        if (controller != null && controller.mediaItemCount == state.playbackQueue.size) controller.moveMediaItem(from, to)
+    }
+
+    /** Takes a song out of the queue (never the one playing). */
+    fun removeFromQueue(controller: MediaController?, index: Int) {
+        val state = _playbackState.value
+        if (index !in state.playbackQueue.indices || index == state.playbackQueueIndex) return
+        val queue = state.playbackQueue.toMutableList().also { it.removeAt(index) }
+        val current = state.playbackQueueIndex
+        val newIndex = if (current != null && index < current) current - 1 else current
+        _playbackState.value = state.copy(playbackQueue = queue, playbackQueueIndex = newIndex)
+        persistPlaybackSnapshot()
+        if (controller != null && controller.mediaItemCount == state.playbackQueue.size) controller.removeMediaItem(index)
+    }
+
     fun playNextInQueue(localController: MediaController?) {
         seekRelative(localController, forward = true)
     }
@@ -489,9 +550,36 @@ class MonoMusicViewModel(
     // Library
     // ------------------------------------------------------------------
 
+    /** Song id → (album key, artist key), for summing play counts per album and artist. */
+    @Volatile
+    private var songKeys: Map<String, Pair<String?, String?>> = emptyMap()
+
+    /**
+     * Play counts as of now, for a sort (read when a page is drawn, so a list never reorders under
+     * you while it is open). Albums and artists: plays summed, latest play.
+     */
+    fun playStats(): com.calmapps.calmmusic.ui.PlayStats {
+        val bySong = app.playHistory.snapshot()
+        val byAlbum = HashMap<String, com.calmapps.calmmusic.data.PlayStat>()
+        val byArtist = HashMap<String, com.calmapps.calmmusic.data.PlayStat>()
+        fun add(map: HashMap<String, com.calmapps.calmmusic.data.PlayStat>, key: String?, s: com.calmapps.calmmusic.data.PlayStat) {
+            if (key == null) return
+            val old = map[key]
+            map[key] = if (old == null) s else com.calmapps.calmmusic.data.PlayStat(old.count + s.count, maxOf(old.lastPlayed, s.lastPlayed))
+        }
+        val keys = songKeys
+        bySong.forEach { (id, stat) ->
+            val (album, artist) = keys[id] ?: return@forEach
+            add(byAlbum, album, stat)
+            add(byArtist, artist, stat)
+        }
+        return com.calmapps.calmmusic.ui.PlayStats(song = { bySong[it] }, album = { byAlbum[it] }, artist = { byArtist[it] })
+    }
+
     suspend fun refreshLibraryFromDatabase() {
         try {
             val songs = withContext(Dispatchers.IO) { songDao.getAll() }
+            songKeys = songs.associate { it.id to (it.albumKey to it.artistKey) }
             _librarySongs.value = songs.map { it.toUiModel() }
             _libraryAlbums.value = deriveAlbums(songs)
             _libraryArtists.value = deriveArtists(songs)
@@ -588,7 +676,10 @@ class MonoMusicViewModel(
     fun cachedArtistContent(artistId: String): ArtistContent? = app.pageCache.artist(artistId)
 
     suspend fun loadArtistContent(artistId: String, name: String? = null): ArtistContent =
-        getArtistContent(artistId, name).also { app.pageCache.putArtist(artistId, it) }
+        getArtistContent(artistId, name).also {
+            app.pageCache.putArtist(artistId, it)
+            app.covers.prefetch(it.albums + it.singles)
+        }
 
     suspend fun getAlbumSongsForDetails(album: AlbumUiModel, quick: Boolean = false): List<SongUiModel> {
         var localSongs = getAlbumSongs(album.id)
@@ -810,7 +901,7 @@ class MonoMusicViewModel(
             val i = localAlbums.indexOfFirst { norm(it.title) == norm(yt.title) }
             if (i < 0) return yt
             val mine = localAlbums.removeAt(i)
-            return mine.copy(releaseYear = mine.releaseYear ?: yt.releaseYear)
+            return mine.copy(releaseYear = mine.releaseYear ?: yt.releaseYear, coverUrl = mine.coverUrl ?: yt.coverUrl)
         }
         val albums = remote.albums.map(::onPhone)
         val singles = remote.singles.map(::onPhone)
@@ -842,7 +933,7 @@ class MonoMusicViewModel(
         val page = client.getArtist(artistId) ?: error("Couldn't load this artist")
         val albums = async { page.allAlbums?.let { runCatching { client.getDiscography(it, page.name) }.getOrNull() }?.takeIf { it.isNotEmpty() } ?: page.albums }
         val singles = async { page.allSingles?.let { runCatching { client.getDiscography(it, page.name) }.getOrNull() }?.takeIf { it.isNotEmpty() } ?: page.singles }
-        fun toUi(a: InnertubeAlbumResult) = AlbumUiModel(id = a.albumId, title = a.title, artist = a.artist ?: page.name, sourceType = "YOUTUBE", releaseYear = a.year)
+        fun toUi(a: InnertubeAlbumResult) = AlbumUiModel(id = a.albumId, title = a.title, artist = a.artist ?: page.name, sourceType = "YOUTUBE", releaseYear = a.year, coverUrl = a.coverUrl)
         ArtistContent(
             songs = page.topSongs.map {
                 SongUiModel(
@@ -1197,6 +1288,7 @@ class MonoMusicViewModel(
             } catch (_: Exception) {
             }
             refreshLibraryFromDatabase()
+            app.covers.prefetch(_libraryAlbums.value)
 
             // Give pre-rewrite downloads their YouTube identity back.
             try {

@@ -164,6 +164,21 @@ two fixes; not re-measured after them because the owner was using the phone.
   "Complete albums with YouTube" (album pages always show the whole track list; a local album opens with
   what YouTube returns within 1.5 s, the rest fills in quietly) and "Include local music".
 
+### 2026-10-08 — features 1, 3, 4, 5
+- **Album covers** (`CoverStore.kt`, `ui/kit/CoverTile.kt`): YouTube Music's album thumbnail, the picture in
+  the album's files, or a song's YouTube still (16:9, middle square). Square, grey, more contrast, cached as
+  PNG. Shown on album rows (48 dp tile), the album page header (96 dp, with artist · year · songs · how many
+  on the phone) and Now Playing (112 dp beside the title). Rows draw only covers already in memory (no
+  pop-in); covers load in the background; an album page loads its cover before opening.
+  **Settings → Album covers** turns them off.
+- **Play history** (`data/PlayHistory.kt`): a play counts after 30 s, recorded by the playback service.
+  Sorts: Most played and Recently played on Songs, Albums and Artists (albums and artists sum their songs).
+  Counting started 2026-10-08. Lists re-sort when a page opens, never while it is open.
+- **Queue page**: Now Playing → queue icon. Tap a song to play it; hold and drag to move it (bold line where it
+  lands); ✕ removes it. Opens with the playing song on top.
+- **Settings → Download quality** (Small ≈70 / Normal ≈128 / Best ≈160 kbps) and **Download on Wi-Fi only**
+  (downloads wait, shown as "waiting for Wi-Fi" on the Downloads page).
+
 ## Owner's decisions
 - 2026-10-07: fork MonoMusic only; CalmMusic compared and not used.
 - 2026-10-07: full Kompakt treatment, like Macros and Fit.
@@ -177,3 +192,4 @@ two fixes; not re-measured after them because the owner was using the phone.
   - **4C** — Now Playing keeps the slider and position updating every second (owner's choice, like Fit's rest timer).
 - 2026-10-08: app name MonoMusic; old MonoMusic uninstalled (its data didn't matter). More tab → top-bar ⋮.
 - 2026-10-08: round 2 picks 1A 2A 3A (sorting toggles direction on a second tap); Downloads and Settings as top-bar icons; Radio off; settings that should just be on are removed.
+- 2026-10-08: features 1 (covers, with an off switch), 3 (play history), 4 (queue), 5 (download quality, Wi-Fi only). No RYM.

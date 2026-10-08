@@ -38,6 +38,7 @@ fun ListRow(
     leading: (@Composable () -> Unit)? = null,
     subtitleLeading: (@Composable RowScope.() -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
+    leadingWidth: Dp = ListRowDefaults.LeadingWidth,
 ) {
     Column(modifier.fillMaxWidth()) {
         Row(
@@ -45,7 +46,7 @@ fun ListRow(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (leading != null) {
-                Box(Modifier.size(ListRowDefaults.LeadingWidth), contentAlignment = Alignment.CenterStart) { leading() }
+                Box(Modifier.size(leadingWidth), contentAlignment = Alignment.CenterStart) { leading() }
             }
             Column(Modifier.weight(1f)) {
                 TextMMD(
@@ -73,7 +74,7 @@ fun ListRow(
             }
         }
         if (showDivider) {
-            DashedDividerMMD(Modifier.padding(start = if (leading != null) ListRowDefaults.LeadingWidth else 0.dp))
+            DashedDividerMMD(Modifier.padding(start = if (leading != null) leadingWidth else 0.dp))
         }
     }
 }
@@ -84,4 +85,6 @@ object ListRowDefaults {
     val OneLineHeight: Dp = 64.dp
     /** A 28dp glyph or a track number, then the label. */
     val LeadingWidth: Dp = 40.dp
+    /** A 48dp cover tile and the 16dp gap after it (zeroheight List: tile icon). */
+    val TileWidth: Dp = 64.dp
 }

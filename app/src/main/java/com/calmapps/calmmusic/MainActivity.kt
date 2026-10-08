@@ -103,6 +103,7 @@ import com.calmapps.calmmusic.ui.PlaylistsScreen
 import com.calmapps.calmmusic.ui.RadioScreen
 import com.calmapps.calmmusic.ui.SearchScreen
 import com.calmapps.calmmusic.ui.SettingsScreen
+import com.calmapps.calmmusic.ui.QueueScreen
 import com.calmapps.calmmusic.ui.sortedArtistsFor
 import com.calmapps.calmmusic.ui.sortedFor
 import com.calmapps.calmmusic.ui.SortSheet
@@ -444,7 +445,10 @@ fun MonoMusic(app: MonoMusic) {
     }
 
     fun openAlbum(album: AlbumUiModel) = openWhenReady(
-        load = { if (viewModel.cachedAlbumSongs(album) == null) viewModel.loadAlbumSongs(album, quick = true) },
+        load = {
+            if (viewModel.cachedAlbumSongs(album) == null) viewModel.loadAlbumSongs(album, quick = true)
+            if (settingsManager.showAlbumCovers.value) kotlinx.coroutines.withTimeoutOrNull(1500) { app.covers.load(album) }
+        },
         open = {
             selectedAlbum = album
             navController.navigate(Screen.AlbumDetails.route) { launchSingleTop = true }
@@ -544,6 +548,7 @@ fun MonoMusic(app: MonoMusic) {
                                 artist = album.artist,
                                 sourceType = "YOUTUBE",
                                 releaseYear = album.year,
+                                coverUrl = album.coverUrl,
                             )
                         }
 
@@ -1254,7 +1259,7 @@ fun MonoMusic(app: MonoMusic) {
                 composable(Screen.Artists.route) {
  chrome(Screen.Artists.route) {
                     ArtistsScreen(
-                        artists = remember(libraryArtists, sorts) { libraryArtists.sortedArtistsFor(sortOf(SortPage.ARTISTS)) },
+                        artists = remember(libraryArtists, sorts) { libraryArtists.sortedArtistsFor(sortOf(SortPage.ARTISTS), viewModel.playStats()) },
                         isLoading = isLoadingSongs || isLoadingAlbums,
                         errorMessage = null,
                         isSyncInProgress = isLibrarySyncInProgress,
@@ -1269,7 +1274,7 @@ fun MonoMusic(app: MonoMusic) {
 }
                 composable(Screen.Songs.route) {
  chrome(Screen.Songs.route) {
-                    val shownSongs = remember(librarySongs, sorts) { librarySongs.sortedFor(sortOf(SortPage.SONGS)) }
+                    val shownSongs = remember(librarySongs, sorts) { librarySongs.sortedFor(sortOf(SortPage.SONGS), viewModel.playStats()) }
                     SongsScreen(
                         songs = shownSongs,
                         isLoading = isLoadingSongs,
@@ -1301,7 +1306,7 @@ fun MonoMusic(app: MonoMusic) {
                 composable(Screen.Albums.route) {
  chrome(Screen.Albums.route) {
                     AlbumsScreen(
-                        albums = remember(libraryAlbums, sorts) { libraryAlbums.sortedFor(sortOf(SortPage.ALBUMS)) },
+                        albums = remember(libraryAlbums, sorts) { libraryAlbums.sortedFor(sortOf(SortPage.ALBUMS), viewModel.playStats()) },
                         isLoading = isLoadingAlbums,
                         errorMessage = albumsError,
                         isSyncInProgress = isLibrarySyncInProgress,
@@ -1469,6 +1474,17 @@ fun MonoMusic(app: MonoMusic) {
                     )
                 }
 }
+                composable(Screen.Queue.route) {
+ chrome(Screen.Queue.route) {
+                    QueueScreen(
+                        queue = playbackState.playbackQueue,
+                        currentIndex = playbackState.playbackQueueIndex,
+                        onPlay = { i -> viewModel.playQueueIndex(localMediaController, i) },
+                        onMove = { from, to -> viewModel.moveInQueue(localMediaController, from, to) },
+                        onRemove = { i -> viewModel.removeFromQueue(localMediaController, i) },
+                    )
+                }
+}
                 composable(Screen.MusicFolders.route) {
  chrome(Screen.MusicFolders.route) {
                     val folderPickerLauncher = rememberLauncherForActivityResult(
@@ -1547,7 +1563,20 @@ fun MonoMusic(app: MonoMusic) {
             // YouTube songs carry their artist's id; library songs match a library artist by name.
             val artistTarget = song.artistId
                 ?: libraryArtists.firstOrNull { it.name.equals(song.artist, ignoreCase = true) }?.id
+            val showCovers by settingsManager.showAlbumCovers.collectAsState()
+            // Now Playing ticks every second anyway (owner's pick 4C), so its cover may arrive late
+            var npCover by remember(song.id) { mutableStateOf(app.covers.peekSong(song)) }
+            LaunchedEffect(song.id, showCovers) {
+                if (showCovers && npCover == null) npCover = app.covers.loadForSong(song)
+            }
             NowPlayingScreen(
+                cover = npCover,
+                showCover = showCovers,
+                // Now Playing closes in the frame the queue opens
+                onQueueClick = {
+                    showNowPlaying = false
+                    navController.navigate(Screen.Queue.route) { launchSingleTop = true }
+                },
                 onArtistClick = artistTarget?.let { id ->
                     // Now Playing closes in the same frame the artist page opens
                     { openArtist(song.artist, id, before = { showNowPlaying = false }) }
@@ -2285,6 +2314,7 @@ fun getAppBarTitle(currentRoute: String?): String {
         currentRoute == Screen.Downloads.route -> "Downloads"
         currentRoute == Screen.Settings.route -> "Settings"
         currentRoute == Screen.MusicFolders.route -> "Music folders"
+        currentRoute == Screen.Queue.route -> "Queue"
         currentRoute == Screen.PlaylistEdit.route -> "Edit Playlist"
         currentRoute == Screen.PlaylistAddSongs.route -> "Add Songs"
         currentRoute == Screen.PlaylistDetails.route -> "Playlist"

@@ -7,6 +7,7 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -51,6 +52,10 @@ fun SettingsScreen(
     var flashEnabled by remember { mutableStateOf(EinkRefresh.enabled) }
     var flashActions by remember { mutableIntStateOf(EinkRefresh.actions) }
     var choosingInterval by remember { mutableStateOf(false) }
+    val settings = (androidx.compose.ui.platform.LocalContext.current.applicationContext as com.calmapps.calmmusic.MonoMusic).settingsManager
+    var quality by remember { mutableIntStateOf(settings.getDownloadQualityKbps()) }
+    var wifiOnly by remember { mutableStateOf(settings.getDownloadOnWifiOnly()) }
+    var choosingQuality by remember { mutableStateOf(false) }
 
     // what the last or running scan did, in one line (updated per step, not per file)
     val scanStatus = when {
@@ -90,6 +95,36 @@ fun SettingsScreen(
         }
         item { GroupDivider() }
         item {
+            val covers by settings.showAlbumCovers.collectAsState()
+            SwitchRow(
+                title = "Album covers",
+                subtitle = if (covers) "Shown on albums and Now Playing" else "Hidden",
+                checked = covers,
+                onCheckedChange = { settings.setShowAlbumCovers(it) },
+            )
+        }
+        item { GroupDivider() }
+        item {
+            ValueRow(
+                title = "Download quality",
+                value = qualityLabel(quality),
+                onClick = { choosingQuality = true },
+            )
+        }
+        item { RowDivider() }
+        item {
+            SwitchRow(
+                title = "Download on Wi-Fi only",
+                subtitle = if (wifiOnly) "Downloads wait for Wi-Fi" else "Also uses mobile data",
+                checked = wifiOnly,
+                onCheckedChange = {
+                    wifiOnly = it
+                    settings.setDownloadOnWifiOnly(it)
+                },
+            )
+        }
+        item { GroupDivider() }
+        item {
             SwitchRow(
                 title = "Flash to clear ghosting",
                 subtitle = "Turns the screen black for a moment",
@@ -110,6 +145,20 @@ fun SettingsScreen(
                 )
             }
         }
+    }
+
+    if (choosingQuality) {
+        ChoiceSheet(
+            title = "Download quality",
+            options = listOf(70, 130, 160),
+            selected = quality,
+            label = ::qualityLabel,
+            onSelect = {
+                quality = it
+                settings.setDownloadQualityKbps(it)
+            },
+            onDismissRequest = { choosingQuality = false },
+        )
     }
 
     if (choosingInterval) {
@@ -152,6 +201,13 @@ fun MusicFoldersScreen(
             }
         }
     }
+}
+
+/** YouTube's audio comes at about 70, 128 and 160 kbps; the setting caps which one is downloaded. */
+private fun qualityLabel(kbps: Int): String = when {
+    kbps <= 70 -> "Small · about 0.5 MB a minute"
+    kbps <= 130 -> "Normal · about 1 MB a minute"
+    else -> "Best · about 1.2 MB a minute"
 }
 
 private fun formatDirectoryPath(uriString: String): String {

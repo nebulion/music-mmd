@@ -1,5 +1,6 @@
 package com.calmapps.calmmusic.ui
 
+import androidx.compose.material.icons.automirrored.outlined.QueueMusic
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -81,6 +82,10 @@ fun NowPlayingScreen(
     streamResolverLabel: String? = null,
     /** Opens the artist's page; null when the artist isn't known (no link shown). */
     onArtistClick: (() -> Unit)? = null,
+    onQueueClick: () -> Unit = {},
+    /** The playing song's cover; null hides it (Settings → Album covers off, or none). */
+    cover: androidx.compose.ui.graphics.ImageBitmap? = null,
+    showCover: Boolean = false,
 ) {
     Column(
         modifier = Modifier
@@ -116,20 +121,27 @@ fun NowPlayingScreen(
         verticalArrangement = Arrangement.SpaceBetween,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-
-
+        // The cover sits beside the title, artist and album, all resting on the slider (owner,
+        // 2026-10-08: the cover stacked on top pushed the text off the screen).
+        Row(
+            modifier = Modifier.fillMaxWidth().weight(1f),
+            verticalAlignment = Alignment.Bottom,
+        ) {
+        if (showCover && !isVideo) {
+            com.calmapps.calmmusic.ui.kit.CoverBox(cover, 112.dp)
+            Spacer(modifier = Modifier.width(16.dp))
+        }
         Column(
             modifier = Modifier
-                .fillMaxWidth()
                 .weight(1f)
                 .padding(horizontal = 4.dp),
             verticalArrangement = Arrangement.Bottom,
         ) {
             Text(
                 text = title,
-                fontSize = if (isVideo) 24.sp else 42.sp,
+                style = if (isVideo) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineLarge,
                 fontWeight = FontWeight.Black,
-                maxLines = if (isVideo) 1 else 2,
+                maxLines = if (isVideo) 1 else 3,
                 overflow = TextOverflow.Ellipsis
             )
 
@@ -179,6 +191,8 @@ fun NowPlayingScreen(
                     },
                 )
             }
+        }
+
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -294,6 +308,13 @@ fun NowPlayingScreen(
                         )
                     }
                 }
+            }
+
+            IconButton(onClick = onQueueClick) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.QueueMusic,
+                    contentDescription = "Queue",
+                )
             }
 
             IconButton(onClick = onAddToPlaylistClick) {

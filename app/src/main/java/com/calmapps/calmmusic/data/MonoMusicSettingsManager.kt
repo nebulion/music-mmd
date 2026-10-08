@@ -73,6 +73,29 @@ class MonoMusicSettingsManager(context: Context) {
         _completeAlbumsWithYouTube.value = enabled
     }
 
+    private val _showAlbumCovers = MutableStateFlow(prefs.getBoolean(KEY_SHOW_ALBUM_COVERS, true))
+    /** Settings → Album covers (owner, 2026-10-08), on by default. */
+    val showAlbumCovers: StateFlow<Boolean> = _showAlbumCovers.asStateFlow()
+
+    fun setShowAlbumCovers(shown: Boolean) {
+        prefs.edit { putBoolean(KEY_SHOW_ALBUM_COVERS, shown) }
+        _showAlbumCovers.value = shown
+    }
+
+    /** Highest download bitrate, kbps (YouTube audio comes at about 70, 128 or 160). */
+    fun getDownloadQualityKbps(): Int = prefs.getInt(KEY_DOWNLOAD_QUALITY_KBPS, 160)
+
+    fun setDownloadQualityKbps(kbps: Int) {
+        prefs.edit { putInt(KEY_DOWNLOAD_QUALITY_KBPS, kbps) }
+    }
+
+    /** Downloads wait for Wi-Fi (an unmetered network) instead of using mobile data. */
+    fun getDownloadOnWifiOnly(): Boolean = prefs.getBoolean(KEY_DOWNLOAD_WIFI_ONLY, false)
+
+    fun setDownloadOnWifiOnly(enabled: Boolean) {
+        prefs.edit { putBoolean(KEY_DOWNLOAD_WIFI_ONLY, enabled) }
+    }
+
     // Permissions onboarding
     fun hasCompletedPermissionsOnboarding(): Boolean {
         return prefs.getBoolean(KEY_HAS_COMPLETED_PERMISSIONS_ONBOARDING, false)
@@ -90,5 +113,8 @@ class MonoMusicSettingsManager(context: Context) {
         private const val KEY_LAST_LOCAL_LIBRARY_SCAN_MILLIS = "last_local_library_scan_millis"
         private const val KEY_HAS_COMPLETED_PERMISSIONS_ONBOARDING = "has_completed_permissions_onboarding"
         private const val KEY_COMPLETE_ALBUMS_WITH_YOUTUBE = "complete_albums_with_youtube"
+        private const val KEY_DOWNLOAD_QUALITY_KBPS = "download_quality_kbps"
+        private const val KEY_DOWNLOAD_WIFI_ONLY = "download_wifi_only"
+        private const val KEY_SHOW_ALBUM_COVERS = "show_album_covers"
     }
 }

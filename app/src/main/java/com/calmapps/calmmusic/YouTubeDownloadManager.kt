@@ -44,6 +44,9 @@ data class YouTubeDownloadStatus(
     enum class State { PENDING, IN_PROGRESS, COMPLETED, FAILED, CANCELED, SKIPPED }
 }
 
+/** Status text of a download held back by Settings → Download on Wi-Fi only. */
+const val WAITING_FOR_WIFI = "Waiting for Wi-Fi"
+
 class YouTubeDownloadManager(
     private val app: MonoMusic,
     private val appScope: CoroutineScope,
@@ -89,7 +92,12 @@ class YouTubeDownloadManager(
             var errorMessage: String? = null
             val ok = try {
                 downloadSemaphore.withPermit {
-                    updateDownload(id) { it.copy(state = YouTubeDownloadStatus.State.IN_PROGRESS) }
+                    // Settings → Download on Wi-Fi only: hold here until an unmetered network is up
+                    while (app.settingsManager.getDownloadOnWifiOnly() && !onUnmeteredNetwork(context)) {
+                        updateDownload(id) { it.copy(errorMessage = WAITING_FOR_WIFI) }
+                        kotlinx.coroutines.delay(10_000)
+                    }
+                    updateDownload(id) { it.copy(state = YouTubeDownloadStatus.State.IN_PROGRESS, errorMessage = null) }
                     performYouTubeDownloadInternal(
                         app = app,
                         requestedSong = song,
@@ -127,6 +135,12 @@ class YouTubeDownloadManager(
         val again = ids.mapNotNull { requests.remove(it) }
         _downloads.value = _downloads.value.filterNot { it.id in ids }
         again.forEach { (song, artist, album) -> enqueueDownload(song, artist, album) }
+    }
+
+    private fun onUnmeteredNetwork(context: Context): Boolean {
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+        val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return false
+        return caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
     }
 
     fun cancelDownload(id: String) {
@@ -232,7 +246,7 @@ internal suspend fun performYouTubeDownloadInternal(
                 url
             } catch (e: Exception) {
                 Log.w(TAG, "[$videoId] InnerTube/Piped failed: ${e.message}. Falling back to NewPipe.")
-                val url = app.youTubeStreamResolver.getDownloadAudioUrl(videoId)
+                val url = app.youTubeStreamResolver.getDownloadAudioUrl(videoId, app.settingsManager.getDownloadQualityKbps())
                 Log.i(TAG, "[$videoId] Resolved URL via NewPipe")
                 url
             }

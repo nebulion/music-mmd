@@ -111,7 +111,7 @@ internal object InnertubeArtistParser {
                 runs.optJSONObject(i)?.optString("text")?.trim()?.toIntOrNull()?.takeIf { it in 1900..2100 }
             }
         }
-        return InnertubeAlbumResult(albumId = id, title = title, artist = artistName?.takeIf { it.isNotBlank() }, year = year)
+        return InnertubeAlbumResult(albumId = id, title = title, artist = artistName?.takeIf { it.isNotBlank() }, year = year, coverUrl = thumbnailOf(item))
     }
 
     /**
@@ -169,6 +169,16 @@ internal object InnertubeArtistParser {
             artistId = artistId,
             albumId = albumId,
         )
+    }
+
+    /** The smallest thumbnail of at least 200 px (or the largest there is) under [item]. */
+    fun thumbnailOf(item: JSONObject): String? {
+        val lists = mutableListOf<JSONObject>()
+        collect(item, "musicThumbnailRenderer", lists)
+        val thumbs = lists.firstOrNull()?.optJSONObject("thumbnail")?.optJSONArray("thumbnails") ?: return null
+        val all = (0 until thumbs.length()).mapNotNull { thumbs.optJSONObject(it) }
+        val pick = all.filter { it.optInt("width") >= 200 }.minByOrNull { it.optInt("width") } ?: all.lastOrNull()
+        return pick?.optString("url")?.takeIf { it.startsWith("http") }
     }
 
     private val DURATION = Regex("""^\d{1,2}(:\d{2}){1,2}$""")

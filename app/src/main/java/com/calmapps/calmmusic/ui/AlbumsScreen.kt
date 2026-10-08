@@ -35,6 +35,8 @@ data class AlbumUiModel(
     /** Optional release year for display when available. */
     val releaseYear: Int? = null,
     val addedAt: Long? = null,
+    /** YouTube Music's thumbnail for the album, when it came from YouTube. */
+    val coverUrl: String? = null,
 )
 
 @Composable
@@ -134,6 +136,8 @@ fun AlbumItem(
         bold = true,
         showDivider = showDivider,
         modifier = Modifier.clickable(onClick = onClick),
+        leading = if (com.calmapps.calmmusic.ui.kit.coversShown()) ({ com.calmapps.calmmusic.ui.kit.CoverTile(album) }) else null,
+        leadingWidth = com.calmapps.calmmusic.ui.kit.ListRowDefaults.TileWidth,
         // as on song rows: a cloud marks what isn't on the phone
         subtitleLeading = if (album.sourceType == "YOUTUBE") {
             {

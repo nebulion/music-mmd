@@ -43,6 +43,7 @@ fun AlbumUiModel.toJson(): JSONObject = JSONObject()
     .putOpt("artist", artist)
     .put("sourceType", sourceType)
     .putOpt("releaseYear", releaseYear)
+    .putOpt("coverUrl", coverUrl)
 
 fun albumFromJson(o: JSONObject): AlbumUiModel = AlbumUiModel(
     id = o.getString("id"),
@@ -50,6 +51,7 @@ fun albumFromJson(o: JSONObject): AlbumUiModel = AlbumUiModel(
     artist = o.optStringOrNull("artist"),
     sourceType = o.optString("sourceType", "YOUTUBE"),
     releaseYear = if (o.has("releaseYear")) o.getInt("releaseYear") else null,
+    coverUrl = o.optStringOrNull("coverUrl"),
 )
 
 fun ArtistResultUiModel.toJson(): JSONObject = JSONObject()

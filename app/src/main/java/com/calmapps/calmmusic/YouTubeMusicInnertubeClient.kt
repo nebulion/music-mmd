@@ -53,6 +53,7 @@ data class InnertubeAlbumResult(
     val artist: String?,
     val year: Int?,
     val artistId: String? = null,
+    val coverUrl: String? = null,
 )
 
 data class InnertubeAlbumTrack(
@@ -540,6 +541,7 @@ internal class YouTubeMusicInnertubeClientImpl(
             artist = artist,
             year = year,
             artistId = artistId,
+            coverUrl = InnertubeArtistParser.thumbnailOf(item),
         )
     }
 
