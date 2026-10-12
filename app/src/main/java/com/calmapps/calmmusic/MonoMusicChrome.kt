@@ -15,6 +15,8 @@ import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Column
@@ -311,10 +313,32 @@ private fun MonoMusicTopAppBarActions(
         // the three dots"). Four actions on the tab pages: one over MMD's three, by choice.
         IconButton(onClick = { onOpenPage(Screen.Downloads.route) }) {
             if (activeDownloads > 0) {
-                com.mudita.mmd.components.badge.BadgedBoxMMD(
-                    badge = { com.mudita.mmd.components.badge.BadgeMMD { TextMMD(if (activeDownloads > 99) "99+" else "$activeDownloads") } },
-                ) {
-                    Icon(imageVector = Icons.Outlined.Download, contentDescription = "Downloads, $activeDownloads left")
+                // A drawn badge (owner, 2026-10-12: "the badge is broken"): BadgeMMD's number took the
+                // 20sp body style and was clipped in its small disc. Black pill, white 14sp number.
+                Box(Modifier.size(48.dp)) {
+                    Icon(
+                        imageVector = Icons.Outlined.Download,
+                        contentDescription = "Downloads, $activeDownloads left",
+                        modifier = Modifier.align(Alignment.Center),
+                    )
+                    Box(
+                        Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(top = 4.dp)
+                            .height(20.dp)
+                            .widthIn(min = 20.dp)
+                            .background(MaterialTheme.colorScheme.onSurface, androidx.compose.foundation.shape.RoundedCornerShape(10.dp))
+                            .padding(horizontal = 5.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        TextMMD(
+                            text = if (activeDownloads > 99) "99+" else "$activeDownloads",
+                            style = MaterialTheme.typography.labelSmall.copy(lineHeight = 14.sp),
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.surface,
+                            maxLines = 1,
+                        )
+                    }
                 }
             } else {
                 Icon(imageVector = Icons.Outlined.Download, contentDescription = "Downloads")

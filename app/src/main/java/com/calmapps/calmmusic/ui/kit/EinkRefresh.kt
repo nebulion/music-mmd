@@ -67,7 +67,9 @@ object EinkRefresh {
 
                 override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
                 override fun onActivityStarted(activity: Activity) = Unit
-                override fun onActivityPaused(activity: Activity) = Unit
+                // leaving the app (owner, 2026-10-12: "flashes when exiting"): a flash due a moment
+                // after the last tap must not fire over the app as it goes
+                override fun onActivityPaused(activity: Activity) = handler.removeCallbacksAndMessages(null)
                 override fun onActivityStopped(activity: Activity) = Unit
                 override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
                 override fun onActivityDestroyed(activity: Activity) = Unit
@@ -87,7 +89,7 @@ object EinkRefresh {
     fun flash(activity: Activity?, delayMs: Long = 0) {
         val root = activity?.window?.decorView as? ViewGroup ?: return
         handler.postDelayed({
-            if (activity.isFinishing || activity.isDestroyed) return@postDelayed
+            if (activity.isFinishing || activity.isDestroyed || !activity.hasWindowFocus()) return@postDelayed
             val overlay = View(activity).apply {
                 setBackgroundColor(Color.BLACK)
                 layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)

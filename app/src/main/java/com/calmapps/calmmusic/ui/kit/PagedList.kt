@@ -167,7 +167,11 @@ suspend fun LazyListState.pageBack() {
     val info = layoutInfo
     val first = info.visibleItemsInfo.firstOrNull() ?: return
     val viewport = info.viewportEndOffset - info.viewportStartOffset
-    val back = viewport - (first.offset + first.size)
+    // The mirror of pageForward (owner, 2026-10-12: "scroll down, then up doesn't go up as much"):
+    // a page forward put the page's last row, even cut off, at the top. So the page before is the
+    // one that ends on today's first row: go back all but a pixel of a page, then start it on the
+    // next whole row. (Before, it went back only far enough to show that row whole: a row short.)
+    val back = viewport - 1 - first.offset
     if (back <= 0) {
         scrollToItem((first.index - 1).coerceAtLeast(0))
         return
