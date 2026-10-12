@@ -103,6 +103,8 @@ import com.calmapps.calmmusic.ui.PlaylistsScreen
 import com.calmapps.calmmusic.ui.RadioScreen
 import com.calmapps.calmmusic.ui.SearchScreen
 import com.calmapps.calmmusic.ui.SettingsScreen
+import com.calmapps.calmmusic.ui.LocalSongActions
+import com.calmapps.calmmusic.ui.SongActions
 import com.calmapps.calmmusic.ui.QueueScreen
 import com.calmapps.calmmusic.ui.sortedArtistsFor
 import com.calmapps.calmmusic.ui.sortedFor
@@ -125,6 +127,7 @@ import com.mudita.mmd.components.snackbar.SnackbarHostMMD
 import com.mudita.mmd.components.snackbar.SnackbarHostStateMMD
 import com.mudita.mmd.components.text.TextMMD
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -208,6 +211,8 @@ fun MonoMusic(app: MonoMusic) {
 
     val viewModel: MonoMusicViewModel = viewModel(factory = MonoMusicViewModel.factory(app))
     val playbackState by viewModel.playbackState.collectAsState()
+    // not read here: Now Playing reads it, so the second-by-second tick redraws only Now Playing
+    val positionState = viewModel.position.collectAsState()
     val downloadStatuses by app.youTubeDownloadManager.downloads.collectAsState()
 
     // Connected by the ViewModel before the first frame (see MonoMusicViewModel.connectController).
@@ -461,6 +466,32 @@ fun MonoMusic(app: MonoMusic) {
         },
     )
 
+    // Each artist's newest album (by year, then when it reached the phone), for artist tiles (pick 2A)
+    val newestAlbumByArtist = remember(libraryAlbums) {
+        libraryAlbums.filter { !it.artist.isNullOrBlank() }
+            .groupBy { it.artist!!.lowercase() }
+            .mapValues { (_, albums) -> albums.maxWith(compareBy<AlbumUiModel>({ it.releaseYear ?: 0 }, { it.addedAt ?: 0L })) }
+    }
+
+    // What every song row's ⋮ can do (pick 1A)
+    val songActions = SongActions(
+        playNext = { song -> viewModel.insertIntoQueue(localMediaController, song, next = true) },
+        addToQueue = { song -> viewModel.insertIntoQueue(localMediaController, song, next = false) },
+        goToAlbum = { song ->
+            val title = song.album
+            val album = title?.let { t ->
+                libraryAlbums.firstOrNull { it.title.equals(t, ignoreCase = true) && (it.artist == null || it.artist.equals(song.artist, ignoreCase = true)) }
+                    ?: libraryAlbums.firstOrNull { it.title.equals(t, ignoreCase = true) }
+            } ?: song.albumId?.let { AlbumUiModel(id = it, title = title.orEmpty(), artist = song.artist, sourceType = "YOUTUBE") }
+            album?.let { a -> { openAlbum(a) } }
+        },
+        goToArtist = { song ->
+            val id = song.artistId ?: libraryArtists.firstOrNull { it.name.equals(song.artist, ignoreCase = true) }?.id
+            id?.let { i -> { openArtist(song.artist, i) } }
+        },
+        download = { song -> app.youTubeDownloadManager.enqueueDownload(song) },
+    )
+
     // Save where the owner is whenever the app leaves the screen.
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -491,6 +522,9 @@ fun MonoMusic(app: MonoMusic) {
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
+    val recentSearches = remember { com.calmapps.calmmusic.data.RecentSearches(app) }
+    var recentSearchList by remember { mutableStateOf(recentSearches.all()) }
+
     fun performSearch() {
         if (searchQuery.isBlank()) return
 
@@ -507,21 +541,23 @@ fun MonoMusic(app: MonoMusic) {
             isSearching = true
             searchError = null
             searchVideos = null
-            searchSelectedTab = 0
             try {
-                val songResults = app.youTubeInnertubeClient.searchSongs(
-                            query = searchQuery,
-                            limit = 25,
-                        )
-                        val albumResults = app.youTubeInnertubeClient.searchAlbums(
-                            query = searchQuery,
-                            limit = 25,
-                        )
-                        val artistResults = try {
-                            app.youTubeInnertubeClient.searchArtists(query = searchQuery, limit = 25)
+                // the three searches at once, not one after another (about 3x quicker)
+                val client = app.youTubeInnertubeClient
+                val (songResults, albumResults, artistResults) = kotlinx.coroutines.coroutineScope {
+                    val songsJob = async { client.searchSongs(query = query, limit = 25) }
+                    val albumsJob = async { client.searchAlbums(query = query, limit = 25) }
+                    val artistsJob = async {
+                        try {
+                            client.searchArtists(query = query, limit = 25)
+                        } catch (e: kotlinx.coroutines.CancellationException) {
+                            throw e
                         } catch (_: Exception) {
                             emptyList()
                         }
+                    }
+                    Triple(songsJob.await(), albumsJob.await(), artistsJob.await())
+                }
                         searchArtists = artistResults.map { ArtistResultUiModel(it.artistId, it.name, it.subtitle) }
                         searchSongs = songResults.map {
                             SongUiModel(
@@ -558,6 +594,14 @@ fun MonoMusic(app: MonoMusic) {
                     searchArtists.isNotEmpty() -> 2
                     else -> 0
                 }
+                // remembered for the search page before typing (pick 3A)
+                val songCount = searchSongs.size + searchLocalSongs.count { l -> searchSongs.none { it.id == l.id } }
+                val found = listOfNotNull(
+                    songCount.takeIf { it > 0 }?.let { if (it == 1) "1 song" else "$it songs" },
+                    searchAlbums.size.takeIf { it > 0 }?.let { if (it == 1) "1 album" else "$it albums" },
+                    searchArtists.size.takeIf { it > 0 }?.let { if (it == 1) "1 artist" else "$it artists" },
+                ).joinToString(" · ").ifEmpty { "Nothing found" }
+                recentSearchList = recentSearches.add(query, found)
             } catch (e: Exception) {
                 searchError = e.message ?: "Search failed"
                 searchSongs = emptyList()
@@ -1229,7 +1273,7 @@ fun MonoMusic(app: MonoMusic) {
                 snackbarHost = {},
             ) { paddingValues ->
                 Box(Modifier.fillMaxSize().padding(paddingValues)) {
-                    page()
+                    androidx.compose.runtime.CompositionLocalProvider(LocalSongActions provides songActions) { page() }
 
                 }
             }
@@ -1261,6 +1305,7 @@ fun MonoMusic(app: MonoMusic) {
                         onArtistClick = { artist ->
                             openArtist(artist.name, artist.id)
                         },
+                        coverAlbumFor = { artist -> newestAlbumByArtist[artist.name.lowercase()] },
                     )
                 }
 }
@@ -1336,6 +1381,12 @@ fun MonoMusic(app: MonoMusic) {
                         onArtistClick = { artist -> openArtist(artist.name, artist.id) },
                         query = searchQuery,
                         onEditSearch = { focusRequester.requestFocus() },
+                        recent = recentSearchList,
+                        onRecentClick = { q ->
+                            searchQuery = q
+                            performSearch()
+                        },
+                        onClearRecent = { recentSearchList = recentSearches.clear() },
                         videos = searchVideos,
                         isSearchingVideos = isSearchingVideos,
                         onSearchVideos = {
@@ -1614,7 +1665,7 @@ fun MonoMusic(app: MonoMusic) {
                 album = song.album,
                 isPlaying = playbackState.isPlaybackPlaying,
                 isLoading = playbackState.isBuffering,
-                currentPosition = playbackState.nowPlayingPositionMs.coerceAtMost(displayDuration),
+                currentPosition = { positionState.value.coerceAtMost(displayDuration) },
                 duration = displayDuration,
                 repeatMode = playbackState.repeatMode,
                 isShuffleOn = playbackState.isShuffleOn,

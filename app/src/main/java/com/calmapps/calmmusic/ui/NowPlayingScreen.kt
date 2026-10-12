@@ -57,7 +57,8 @@ fun NowPlayingScreen(
     album: String? = null,
     isPlaying: Boolean,
     isLoading: Boolean,
-    currentPosition: Long,
+    /** Read here, not by the caller, so only Now Playing redraws each second. */
+    currentPosition: () -> Long,
     duration: Long,
     repeatMode: RepeatMode,
     isShuffleOn: Boolean,
@@ -202,7 +203,7 @@ fun NowPlayingScreen(
         ) {
             SliderMMD(
                 modifier = Modifier.fillMaxWidth(),
-                value = if (duration > 0) currentPosition.toFloat() / duration else 0f,
+                value = if (duration > 0) currentPosition().toFloat() / duration else 0f,
                 onValueChange = { value ->
                     if (duration > 0) {
                         val newPosition = (value * duration).toLong().coerceIn(0L, duration)
@@ -220,7 +221,7 @@ fun NowPlayingScreen(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = formatDurationMillisNonNull(currentPosition),
+                    text = formatDurationMillisNonNull(currentPosition()),
                     style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.SemiBold,
                 )
@@ -433,7 +434,7 @@ private fun NowPlayingScreenPreview() {
         album = "Album Name",
         isPlaying = false,
         isLoading = false,
-        currentPosition = 0L,
+        currentPosition = { 0L },
         duration = 1000L,
         repeatMode = RepeatMode.OFF,
         isShuffleOn = false,

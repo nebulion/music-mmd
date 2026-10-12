@@ -73,6 +73,36 @@ class MonoMusic : Application() {
 
     val covers: CoverStore by lazy { CoverStore(this) }
 
+    /**
+     * The library as last read (speed, 2026-10-12). The Kompakt destroys the activity, and with it
+     * the ViewModel, on every trip home ("Don't keep activities"); the process usually lives on. A
+     * new ViewModel starts from this at once instead of reading the database before its first frame.
+     */
+    @Volatile
+    var librarySnapshot: LibrarySnapshot? = null
+
+    /** One connection to the playback service for the whole process, made once. */
+    private var controllerFuture: com.google.common.util.concurrent.ListenableFuture<androidx.media3.session.MediaController>? = null
+
+    /** The connection if it is up now (no waiting). */
+    fun connectedController(): androidx.media3.session.MediaController? =
+        controllerFuture?.takeIf { it.isDone }?.let { runCatching { it.get() }.getOrNull() }?.takeIf { it.isConnected }
+
+    /** The connection, made (once) if needed. Main thread. */
+    suspend fun mediaController(): androidx.media3.session.MediaController? {
+        connectedController()?.let { return it }
+        controllerFuture?.let { old -> if (old.isDone) androidx.media3.session.MediaController.releaseFuture(old) }
+        val token = androidx.media3.session.SessionToken(this, android.content.ComponentName(this, PlaybackService::class.java))
+        val future = androidx.media3.session.MediaController.Builder(this, token).buildAsync()
+        controllerFuture = future
+        return kotlinx.coroutines.suspendCancellableCoroutine { cont ->
+            future.addListener(
+                { cont.resume(runCatching { future.get() }.getOrNull()) { _, _, _ -> } },
+                androidx.core.content.ContextCompat.getMainExecutor(this),
+            )
+        }
+    }
+
     /** Album, artist and playlist page content; see [PageCache]. */
     val pageCache = PageCache()
 
@@ -104,3 +134,11 @@ class MonoMusic : Application() {
     }
 
 }
+
+/** The library lists as the ViewModel derives them; see [MonoMusic.librarySnapshot]. */
+data class LibrarySnapshot(
+    val songs: List<com.calmapps.calmmusic.ui.SongUiModel>,
+    val albums: List<com.calmapps.calmmusic.ui.AlbumUiModel>,
+    val artists: List<com.calmapps.calmmusic.ui.ArtistUiModel>,
+    val songKeys: Map<String, Pair<String?, String?>>,
+)

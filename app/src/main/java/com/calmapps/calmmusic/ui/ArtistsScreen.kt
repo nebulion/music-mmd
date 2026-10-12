@@ -41,6 +41,8 @@ fun ArtistsScreen(
     onOpenStreamingSettingsClick: () -> Unit,
     onOpenLocalSettingsClick: () -> Unit,
     onArtistClick: (ArtistUiModel) -> Unit,
+    /** The album whose cover stands for the artist (their newest), if any. */
+    coverAlbumFor: (ArtistUiModel) -> AlbumUiModel? = { null },
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
         when {
@@ -102,6 +104,7 @@ fun ArtistsScreen(
                         val isLast = artist.id == lastArtistId
                         ArtistItem(
                             artist = artist,
+                            coverAlbum = coverAlbumFor(artist),
                             onClick = { onArtistClick(artist) },
                             showDivider = !isLast,
                         )
@@ -117,7 +120,14 @@ fun ArtistItem(
     artist: ArtistUiModel,
     onClick: () -> Unit,
     showDivider: Boolean = true,
+    coverAlbum: AlbumUiModel? = null,
 ) {
+    // owner's pick 2A: the artist's newest album cover as the tile, like album rows
+    val tile: (@Composable () -> Unit)? = if (com.calmapps.calmmusic.ui.kit.coversShown()) {
+        { if (coverAlbum != null) com.calmapps.calmmusic.ui.kit.CoverTile(coverAlbum) else com.calmapps.calmmusic.ui.kit.CoverBox(null, 48.dp) }
+    } else {
+        null
+    }
     val songLabel = if (artist.songCount == 1) "1 song" else "${artist.songCount} songs"
     val albumLabel = if (artist.albumCount == 1) "1 album" else "${artist.albumCount} albums"
     ListRow(
@@ -125,5 +135,7 @@ fun ArtistItem(
         subtitle = "$songLabel • $albumLabel",
         showDivider = showDivider,
         modifier = Modifier.clickable(onClick = onClick),
+        leading = tile,
+        leadingWidth = com.calmapps.calmmusic.ui.kit.ListRowDefaults.TileWidth,
     )
 }

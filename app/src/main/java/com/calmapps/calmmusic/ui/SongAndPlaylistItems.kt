@@ -1,5 +1,7 @@
 package com.calmapps.calmmusic.ui
 
+import androidx.compose.material3.IconButton
+import androidx.compose.material.icons.outlined.MoreVert
 import android.net.Uri
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
@@ -57,6 +59,8 @@ fun SongItem(
     isInLibrary: Boolean = false,
     /** Show the ✓ for library songs even when they are local files (search results). */
     markInLibrary: Boolean = false,
+    /** The ⋮ with the song's actions (pick 1A). */
+    showActions: Boolean = true,
 ) {
     val (isLocal, subtitle) = remember(
         song.id,
@@ -110,92 +114,69 @@ fun SongItem(
     }
 
     var showMenu by remember { mutableStateOf(false) }
+    val actions = LocalSongActions.current
 
-    Box {
-        ListRow(
-            title = song.title,
-            subtitle = subtitle.ifBlank { null },
-            showDivider = showDivider,
-            modifier = Modifier.combinedClickable(
-                onClick = onClick,
-                onLongClick = { showMenu = true },
-            ),
-            // album pages reserve the number column on every row, so labels line up
-            leading = if (showTrackNumber) {
-                {
-                    if (isCurrentlyPlaying) {
-                        Icon(Icons.Outlined.Headphones, contentDescription = "Now playing", modifier = Modifier.size(24.dp))
-                    } else {
-                        TextMMD(
-                            text = song.trackNumber?.toString().orEmpty(),
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
-                        )
-                    }
+    ListRow(
+        title = song.title,
+        subtitle = subtitle.ifBlank { null },
+        showDivider = showDivider,
+        // tap plays; everything else is behind the ⋮ (owner's pick 1A: no hold → menu, MMD P6)
+        modifier = Modifier.clickable(onClick = onClick),
+        // album pages reserve the number column on every row, so labels line up
+        leading = if (showTrackNumber) {
+            {
+                if (isCurrentlyPlaying) {
+                    Icon(Icons.Outlined.Headphones, contentDescription = "Now playing", modifier = Modifier.size(24.dp))
+                } else {
+                    TextMMD(
+                        text = song.trackNumber?.toString().orEmpty(),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                    )
                 }
-            } else {
-                null
-            },
-            subtitleLeading = {
-                if (!isLocal) {
-                    Icon(Icons.Outlined.Cloud, contentDescription = "Streaming", modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(6.dp))
+            }
+        } else {
+            null
+        },
+        subtitleLeading = {
+            if (isCurrentlyPlaying && !showTrackNumber) {
+                Icon(Icons.Outlined.Headphones, contentDescription = "Now playing", modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+            }
+            if (!isLocal) {
+                Icon(Icons.Outlined.Cloud, contentDescription = "Streaming", modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+            }
+            if (isInLibrary && (!isLocal || markInLibrary)) {
+                Icon(Icons.Outlined.LibraryAddCheck, contentDescription = "In library", modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+            }
+        },
+        trailing = if (showActions) {
+            {
+                IconButton(onClick = { showMenu = true }) {
+                    Icon(Icons.Outlined.MoreVert, contentDescription = "More for ${song.title}")
                 }
-                if (isInLibrary && (!isLocal || markInLibrary)) {
-                    Icon(Icons.Outlined.LibraryAddCheck, contentDescription = "In library", modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(6.dp))
-                }
-            },
-            trailing = if (isCurrentlyPlaying && !showTrackNumber) {
-                { Icon(Icons.Outlined.Headphones, contentDescription = "Now playing", modifier = Modifier.size(24.dp)) }
-            } else {
-                null
-            },
-        )
+            }
+        } else {
+            null
+        },
+    )
 
-        DropdownMenuMMD(
-            expanded = showMenu,
-            onDismissRequest = { showMenu = false },
-        ) {
-            DropdownMenuItemMMD(
-                text = { TextMMD(text = "Add to playlist") },
-                onClick = {
-                    showMenu = false
-                    onAddToPlaylist()
-                },
-            )
-            if (isLocal && onEdit != null) {
-                DashedDividerMMD()
-                DropdownMenuItemMMD(
-                    text = { TextMMD(text = "Edit") },
-                    onClick = {
-                        showMenu = false
-                        onEdit()
-                    },
-                )
-            }
-            if (isInLibrary && !isLocal && !isDownloaded) {
-                DashedDividerMMD()
-                DropdownMenuItemMMD(
-                    text = { TextMMD(text = "Remove from library") },
-                    onClick = {
-                        showMenu = false
-                        onRemoveFromLibrary()
-                    },
-                )
-            }
+    if (showMenu) {
+        val list = buildList {
+            add(SheetAction("Play next") { actions.playNext(song) })
+            add(SheetAction("Add to queue") { actions.addToQueue(song) })
+            add(SheetAction("Add to playlist", onAddToPlaylist))
+            actions.goToAlbum(song)?.let { add(SheetAction("Go to album", it)) }
+            actions.goToArtist(song)?.let { add(SheetAction("Go to artist", it)) }
+            if (!isLocal && !isDownloaded) add(SheetAction("Download") { actions.download(song) })
+            if (isLocal && onEdit != null) add(SheetAction("Edit", onEdit))
+            if (isInLibrary && !isLocal && !isDownloaded) add(SheetAction("Remove from library", onRemoveFromLibrary))
             // destructive last (MMD Menus)
-            if (isDownloaded || isLocal) {
-                DashedDividerMMD()
-                DropdownMenuItemMMD(
-                    text = { TextMMD(text = "Delete") },
-                    onClick = {
-                        showMenu = false
-                        onDelete()
-                    },
-                )
-            }
+            if (isDownloaded || isLocal) add(SheetAction("Delete", onDelete))
         }
+        SongActionSheet(song.title, list) { showMenu = false }
     }
 }
 

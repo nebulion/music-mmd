@@ -61,6 +61,14 @@ class MonoMusicViewModel(
 
     private var playbackMonitorJob: Job? = null
 
+    /**
+     * The playing position, on its own (speed, 2026-10-12): the once-a-second tick used to change
+     * [playbackState], which re-ran the whole 2,300-line main screen every second while music
+     * played. Only Now Playing's slider and times read this.
+     */
+    private val _position = MutableStateFlow(0L)
+    val position: StateFlow<Long> = _position.asStateFlow()
+
     private val _librarySongs = MutableStateFlow<List<SongUiModel>>(emptyList())
     val librarySongs: StateFlow<List<SongUiModel>> = _librarySongs
 
@@ -217,6 +225,23 @@ class MonoMusicViewModel(
             controller.seekTo(index, 0L)
             controller.playWhenReady = true
         }
+    }
+
+    /**
+     * Puts [song] right after the playing one ([next]) or at the end of the queue. With nothing
+     * queued it simply plays.
+     */
+    fun insertIntoQueue(controller: MediaController?, song: SongUiModel, next: Boolean) {
+        val state = _playbackState.value
+        if (state.playbackQueue.isEmpty() || controller == null || controller.mediaItemCount == 0) {
+            startPlaybackFromQueue(listOf(song), 0, localController = controller)
+            return
+        }
+        val at = if (next) ((state.playbackQueueIndex ?: -1) + 1).coerceIn(0, state.playbackQueue.size) else state.playbackQueue.size
+        val queue = state.playbackQueue.toMutableList().also { it.add(at, song) }
+        _playbackState.value = state.copy(playbackQueue = queue)
+        persistPlaybackSnapshot()
+        if (controller.mediaItemCount == state.playbackQueue.size) controller.addMediaItem(at, song.toMediaItem())
     }
 
     /** Moves a queued song; the player's own queue moves with it. */
@@ -396,17 +421,8 @@ class MonoMusicViewModel(
     private var controllerFuture: com.google.common.util.concurrent.ListenableFuture<MediaController>? = null
     private var controllerListener: Player.Listener? = null
 
-    private suspend fun connectController(): MediaController? {
-        val token = androidx.media3.session.SessionToken(app, android.content.ComponentName(app, PlaybackService::class.java))
-        val future = MediaController.Builder(app, token).buildAsync()
-        controllerFuture = future
-        return kotlinx.coroutines.suspendCancellableCoroutine { cont ->
-            future.addListener(
-                { cont.resume(runCatching { future.get() }.getOrNull()) { _, _, _ -> } },
-                androidx.core.content.ContextCompat.getMainExecutor(app),
-            )
-        }
-    }
+    /** The process-wide connection (kept by the application, not released with this ViewModel). */
+    private suspend fun connectController(): MediaController? = app.mediaController()
 
     /**
      * Mirrors the player into [PlaybackState]: at once on every player event (song change,
@@ -447,9 +463,9 @@ class MonoMusicViewModel(
                     val duration = controller.duration
                     val isBufferingNow = controller.playbackState == Player.STATE_BUFFERING
 
+                    _position.value = position
                     var newState = state.copy(
                         isPlaybackPlaying = isPlaying,
-                        nowPlayingPositionMs = position,
                         nowPlayingDurationMs = if (duration > 0) duration else state.nowPlayingDurationMs,
                         isBuffering = isBufferingNow,
                     )
@@ -468,17 +484,19 @@ class MonoMusicViewModel(
                         }
                     }
 
+                    // the state changes only when something but the position did
                     if (newState != state) {
+                        newState = newState.copy(nowPlayingPositionMs = position)
                         _playbackState.value = newState
-                        // Persist on meaningful changes; position-only ticks at most every 5s.
-                        val significantChange = newState.currentSongId != state.currentSongId ||
-                            newState.isPlaybackPlaying != state.isPlaybackPlaying ||
-                            newState.playbackQueueIndex != state.playbackQueueIndex
-                        val nowElapsedMs = android.os.SystemClock.elapsedRealtime()
-                        if (significantChange || nowElapsedMs - lastPersistElapsedMs >= 5000L) {
-                            lastPersistElapsedMs = nowElapsedMs
-                            persistPlaybackSnapshot(newState)
-                        }
+                    }
+                    // Persist on meaningful changes; position-only ticks at most every 5s.
+                    val significantChange = newState.currentSongId != state.currentSongId ||
+                        newState.isPlaybackPlaying != state.isPlaybackPlaying ||
+                        newState.playbackQueueIndex != state.playbackQueueIndex
+                    val nowElapsedMs = android.os.SystemClock.elapsedRealtime()
+                    if (significantChange || nowElapsedMs - lastPersistElapsedMs >= 5000L) {
+                        lastPersistElapsedMs = nowElapsedMs
+                        persistPlaybackSnapshot(newState.copy(nowPlayingPositionMs = position))
                     }
                 }
 
@@ -585,6 +603,7 @@ class MonoMusicViewModel(
             _librarySongs.value = songs.map { it.toUiModel() }
             _libraryAlbums.value = deriveAlbums(songs)
             _libraryArtists.value = deriveArtists(songs)
+            app.librarySnapshot = LibrarySnapshot(_librarySongs.value, _libraryAlbums.value, _libraryArtists.value, songKeys)
             _libraryRefreshTrigger.value += 1
             refreshQueueFromLibrary()
         } catch (_: Exception) {
@@ -1211,7 +1230,11 @@ class MonoMusicViewModel(
         super.onCleared()
         playbackMonitorJob?.cancel()
         controllerListener?.let { l -> _controller.value?.removeListener(l) }
-        controllerFuture?.let { MediaController.releaseFuture(it) }
+        // the connection itself belongs to the application and outlives this ViewModel
+    }
+
+    init {
+        viewModelScope.launch { _playbackState.collect { _position.value = it.nowPlayingPositionMs } }
     }
 
     private var restoreJob: kotlinx.coroutines.Job? = null
@@ -1227,7 +1250,24 @@ class MonoMusicViewModel(
     init {
         // First what the first screen shows (the library as stored, the last queue), so the
         // activity paints once; the folder sync and repairs run after and only repaint on change.
-        restoreJob = viewModelScope.launch {
+        val kept = app.librarySnapshot
+        val live = app.connectedController()
+        if (kept != null && live != null) {
+            // Coming back to the app (speed, 2026-10-12): library and player are already here,
+            // so the first frame is ready at once; the database is re-read quietly after.
+            songKeys = kept.songKeys
+            _librarySongs.value = kept.songs
+            _libraryAlbums.value = kept.albums
+            _libraryArtists.value = kept.artists
+            _controller.value = live
+            if (live.mediaItemCount > 0) adoptPlayerQueue(live)
+            _isLoadingSongs.value = false
+            _isLoadingAlbums.value = false
+            firstScreenReady = true
+            startLocalPlaybackMonitoring(live)
+        }
+
+        restoreJob = if (kept != null && live != null) viewModelScope.launch { refreshLibraryFromDatabase() } else viewModelScope.launch {
             refreshLibraryFromDatabase()
 
             val controller = kotlinx.coroutines.withTimeoutOrNull(1000L) { connectController() }
@@ -1290,7 +1330,12 @@ class MonoMusicViewModel(
             } catch (_: Exception) {
             }
             refreshLibraryFromDatabase()
-            app.covers.prefetch(_libraryAlbums.value)
+            // covers for the whole library once things are calm, not during start-up (speed, 2026-10-12);
+            // rows ask for their own cover meanwhile
+            viewModelScope.launch {
+                delay(5_000)
+                app.covers.prefetch(_libraryAlbums.value)
+            }
 
             // Give pre-rewrite downloads their YouTube identity back.
             try {

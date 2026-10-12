@@ -50,6 +50,10 @@ fun SearchScreen(
     onArtistClick: (ArtistResultUiModel) -> Unit,
     query: String = "",
     onEditSearch: () -> Unit = {},
+    /** Last searches, shown before typing (pick 3A). */
+    recent: List<com.calmapps.calmmusic.data.RecentSearch> = emptyList(),
+    onRecentClick: (String) -> Unit = {},
+    onClearRecent: () -> Unit = {},
     /** Results from all of YouTube; null until asked for. */
     videos: List<SongUiModel>? = null,
     isSearchingVideos: Boolean = false,
@@ -77,6 +81,40 @@ fun SearchScreen(
                 }
 
                 PagedList(contentPadding = PaddingValues(horizontal = 16.dp)) {
+                    // before typing: the last searches, one tap to run again (pick 3A)
+                    if (query.isBlank()) {
+                        if (recent.isNotEmpty()) {
+                            item(key = "recent-title") {
+                                androidx.compose.foundation.layout.Row(
+                                    Modifier.fillMaxWidth(),
+                                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                                ) {
+                                    TextMMD(
+                                        "Recent",
+                                        style = androidx.compose.material3.MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.weight(1f).padding(vertical = 12.dp),
+                                    )
+                                    TextMMD(
+                                        "Clear",
+                                        style = androidx.compose.material3.MaterialTheme.typography.titleSmall,
+                                        modifier = Modifier.clickable(onClick = onClearRecent).padding(12.dp),
+                                    )
+                                }
+                            }
+                            recent.forEachIndexed { i, r ->
+                                item(key = "recent:" + r.query) {
+                                    com.calmapps.calmmusic.ui.kit.ListRow(
+                                        title = r.query,
+                                        subtitle = r.found,
+                                        showDivider = i != recent.lastIndex,
+                                        modifier = Modifier.clickable { onRecentClick(r.query) },
+                                    )
+                                }
+                            }
+                        }
+                        return@PagedList
+                    }
                     if (isSearching) {
                         item {
                             com.calmapps.calmmusic.ui.kit.DelayedText(

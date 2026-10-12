@@ -202,6 +202,19 @@ two fixes; not re-measured after them because the owner was using the phone.
   Songs tab's is gone (Now Playing's shuffle toggle). The playlist page keeps its "Add songs" button.
 - Queue rows: length before artist, so ✕ never cuts the time.
 
+### 2026-10-12 — round 3 (picks 1A 2A 3A) and speed
+- Fixed: download badge (drawn pill, 14 sp), flash when leaving the app (pending flash cancelled on pause),
+  paging up a row short when the page start wasn't remembered (now mirrors paging down). Tasks and Macros
+  have the same paging bug (`PagedList.kt`), not fixed there yet.
+- **1A:** every song row has a ⋮ → sheet: Play next · Add to queue · Add to playlist · Go to album · Go to
+  artist · Download / Edit / Remove from library / Delete. Hold no longer opens a menu (MMD P6).
+- **2A:** artist rows show their newest album's cover as a tile (off with Album covers).
+- **3A:** the search page before typing lists the last six searches with what they found; tap to run again.
+- **Speed:** searches for songs, albums and artists run at once; the position tick no longer recomposes the
+  main screen (only Now Playing reads it); library lists and the player connection live with the process,
+  so returning to the app draws at once; library covers prefetch 5 s after start.
+- Open: Back from an album/artist not returning to Albums/Artists — not reproduced; waiting for steps.
+
 ## Owner's decisions
 - 2026-10-07: fork MonoMusic only; CalmMusic compared and not used.
 - 2026-10-07: full Kompakt treatment, like Macros and Fit.
@@ -216,3 +229,4 @@ two fixes; not re-measured after them because the owner was using the phone.
 - 2026-10-08: app name MonoMusic; old MonoMusic uninstalled (its data didn't matter). More tab → top-bar ⋮.
 - 2026-10-08: round 2 picks 1A 2A 3A (sorting toggles direction on a second tap); Downloads and Settings as top-bar icons; Radio off; settings that should just be on are removed.
 - 2026-10-08: features 1 (covers, with an off switch), 3 (play history), 4 (queue), 5 (download quality, Wi-Fi only). No RYM.
+- 2026-10-12: round 3 picks 1A (⋮ per song row), 2A (artist cover tiles), 3A (recent searches); speed fixes approved.
